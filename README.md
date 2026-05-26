@@ -25,7 +25,7 @@ make bundle                                            # ilk Drive + NotebookLM 
 
 ### 3. Faz başlat (Claude'a tek satır)
 
-```
+```text
 "FAZ_PROMPT'u oku ve sıradaki fazı başlat."
 ```
 
@@ -59,7 +59,7 @@ graphify --version
 
 ## 🏗️ Skill Yapısı
 
-```
+```text
 ~/.claude/skills/kod-fabrikasi/
 ├── SKILL.md                          # Frontmatter + 6 adımlık iş akışı özeti
 ├── references/                       # Level-3: gerektiğinde yüklenir
@@ -79,7 +79,7 @@ graphify --version
 
 `init.sh` projeyi şu hale getirir:
 
-```
+```text
 <proje-root>/
 ├── .claude/kod-fabrikasi.config.json   # tüm proje-spesifik değerler burada
 ├── bundle.py                            # config'ten okur
@@ -94,7 +94,7 @@ graphify --version
 
 ## 🧠 Sistem Nasıl Çalışır
 
-```
+```text
 Sen → kod yaz + ROADMAP/MEMORY/QA güncelle → git commit
                                                   │
                                   pre-commit ─────┤
@@ -112,7 +112,7 @@ Sen → kod yaz + ROADMAP/MEMORY/QA güncelle → git commit
 ```
 
 | Parça | Ne yapar |
-|---|---|
+| --- | --- |
 | **Claude / Antigravity** | Asıl işi yapar: kod yazar, faz raporu yazar, ROADMAP/MEMORY/QA günceller |
 | **NotebookLM** | Projeyi okumuş danışman — soru sorarsın, cevap verir. Dosya yazmaz, faz yapmaz |
 | **Graphify** | AST tabanlı mimari harita — refactor öncesi etki analizi |
@@ -184,7 +184,7 @@ Veya sadece `git commit` at — post-commit hook her şeyi otomatik yapar.
 ## 🆘 Sorun Giderme
 
 | Sorun | Çözüm |
-|---|---|
+| --- | --- |
 | `ModuleNotFoundError: notebooklm` | `python_bin` PATH'teki python3'e işaret ediyor ama paket başka python'a kurulu. `which python3` → config'i o yola sabitle. |
 | NotebookLM'de çift kaynak | `make bundle` tekrar çalıştır — id bazında temizler. |
 | `Drive klasöründe dosya yok` uyarısı | Güvenlik freni devreye girdi (iyi haber). Drive yolu doğru mu? Drive masaüstü çalışıyor mu? |

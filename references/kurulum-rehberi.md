@@ -111,7 +111,7 @@ Eğer NotebookLM'de çift kaynak görüyorsan bir kez daha `make bundle` çalı�
 
 Sistem hazır. Kullanıcıya günlük döngüyü göster:
 
-```
+```text
 Kod yaz → ROADMAP/MEMORY/QA güncelle → git commit
                                           │
                             post-commit ──┤

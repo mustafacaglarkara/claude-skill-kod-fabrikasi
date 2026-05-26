@@ -32,7 +32,7 @@ test -f .git/hooks/post-commit && echo "HOOK_VAR" || echo "HOOK_YOK"
 
 Kullanıcı "faza başla / sıradaki faz / FAZ_PROMPT" derse veya tek satırlık tetikleyici yazarsa **MUTLAKA** bu 6 adımı sırayla uygula. **Adım 2 ASLA atlanmaz** — kullanıcı onayı olmadan koda dokunma.
 
-```
+```text
 0. Faz seç        → ROADMAP.md'deki ilk [ ] (tamamlanmamış) faz
 1. Bağlam topla   → ROADMAP/MEMORY/QA + (gerekirse) notebooklm ask + graphify
 2. Plan + ONAY    → ⚠️ Kullanıcı onayı olmadan koda dokunma
@@ -57,7 +57,7 @@ cat .claude/kod-fabrikasi.config.json
 Config içeriğinden öğreneceklerin:
 
 | Alan | Ne için |
-|---|---|
+| --- | --- |
 | `drive_folder_path` | `bundle.py` çıktısının yazılacağı Drive klasörü |
 | `notebook_id` | NotebookLM hedef notebook |
 | `python_bin` | `notebooklm-py` paketinin kurulu olduğu Python tam yolu (PATH varsayma!) |
@@ -74,7 +74,7 @@ Config şeması ve örnek: [assets/kod-fabrikasi.config.example.json](assets/kod
 ## 🧰 Çalıştırılabilir Yardımcılar (`scripts/`)
 
 | Script | Ne yapar |
-|---|---|
+| --- | --- |
 | [scripts/init.sh](scripts/init.sh) | İnteraktif kurulum: 4 soru sorar, config dosyası üretir, `bundle.py`/`Makefile`/`setup-hooks.sh` template'lerini proje root'a kopyalar. `--repair` ile eksik dosyaları tamamlar. |
 | [scripts/bundle.py](scripts/bundle.py) | Config'i okur, kodu paketler, Drive'a yazar, NotebookLM'i Drive klasörüyle **birebir aynalar**. |
 | [scripts/setup-hooks.sh](scripts/setup-hooks.sh) | Config'teki `framework`'e göre `pre-commit` (test) ve `post-commit` (graphify + bundle) hook'larını üretir. |
@@ -89,7 +89,7 @@ Config şeması ve örnek: [assets/kod-fabrikasi.config.example.json](assets/kod
 Aşağıdaki dosyaları **konuya göre** oku, başta hepsini değil:
 
 | Dosya | Ne zaman oku |
-|---|---|
+| --- | --- |
 | [references/workflow.md](references/workflow.md) | Faz başlatırken, plan sunarken, faz raporu yazarken |
 | [references/kurulum-rehberi.md](references/kurulum-rehberi.md) | Yeni projede kurulum yaparken, init.sh çalıştırırken |
 | [references/notebooklm-graphify.md](references/notebooklm-graphify.md) | NotebookLM ile etkili sorgu, Graphify ile etki analizi gerektiğinde |
@@ -116,7 +116,7 @@ Aşağıdaki dosyaları **konuya göre** oku, başta hepsini değil:
 ## 🔄 Mental Model — Kim Ne Yapar
 
 | Parça | Ne yapar | Dosya yazar mı? | Faz yapar mı? |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | **ROADMAP.md** | Fazların listesi + durum tablosu | — | — |
 | **Claude / Antigravity** | Kod yazar, faz raporu yazar, ROADMAP/MEMORY/QA günceller | ✅ | ✅ |
 | **NotebookLM** | Projeyi okumuş danışman — soru sorarsın, cevap verir | ❌ Asla | ❌ Asla |
