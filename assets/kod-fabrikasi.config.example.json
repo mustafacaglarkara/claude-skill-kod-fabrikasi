@@ -1,0 +1,57 @@
+{
+  "_comment": "Kod Fabrikası proje konfigürasyonu. init.sh tarafından üretilir. Bu dosyayı .claude/kod-fabrikasi.config.json olarak kullan.",
+
+  "drive_folder_path": "/Users/<kullanici>/Library/CloudStorage/GoogleDrive-<email>/Drive'ım/DEV_PROJELERI/<proje-adi>",
+  "notebook_id": "00000000-0000-0000-0000-000000000000",
+  "python_bin": "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3",
+  "graphify_bin": "/Library/Frameworks/Python.framework/Versions/3.13/bin/graphify",
+  "framework": "flutter",
+
+  "sync_to_notebooklm": true,
+
+  "critical_docs": [
+    "ROADMAP.md",
+    "MEMORY.md",
+    "QA_REPORTS.md",
+    "NOTEBOOKLM_SUMMARY.md",
+    "GRAPHIFY_NOTES.md",
+    "FAZ_PROMPT.md",
+    ".claude/ROADMAP.md",
+    ".claude/MEMORY.md"
+  ],
+
+  "sync_dirs": [
+    "reports",
+    "graphify-out"
+  ],
+
+  "phase_files": {
+    "roadmap": "ROADMAP.md",
+    "memory": "MEMORY.md",
+    "qa": "QA_REPORTS.md",
+    "known_bugs": "KNOWN_BUGS.md"
+  },
+
+  "allowed_extensions": [
+    ".go", ".proto", ".sql",
+    ".js", ".ts", ".tsx", ".jsx",
+    ".py", ".json", ".md",
+    ".yml", ".yaml", ".html", ".css",
+    ".php", ".dart", ".swift", ".kt",
+    ".java", ".rb", ".rs"
+  ],
+
+  "ignore_dirs": [
+    "node_modules", ".git", ".idea", ".vscode",
+    "vendor", ".venv", "venv", "dist", "build",
+    "graphify-out", "__pycache__", "storage",
+    "public", "cache", "views", "snapshots",
+    ".dart_tool", ".gradle", ".next", "target"
+  ],
+
+  "notebooklm_allowed_extensions": [".md", ".txt", ".pdf"],
+  "notebooklm_ignore_dirs": ["cache", "__pycache__"],
+  "notebooklm_max_file_size_mb": 50,
+
+  "stale_drive_patterns": []
+}
