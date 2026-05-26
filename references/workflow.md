@@ -67,19 +67,25 @@ Kullanıcıya net bir paket sun:
   - `node` → `npm test`
 - Test başarısızsa **düzelt veya raporda dürüstçe belirt**. Yeşil olmadan fazı kapatma.
 
-## Adım 4 — Faz raporu yaz
+## Adım 4 — Faz raporu yaz (v2.0)
 
-- `reports/fazNN_<kisa_isim>.md` dosyası oluştur (NN = iki haneli; örn. `faz01_veritabani_temizligi.md`).
-- Şablonu birebir uygula: [faz-raporu-sablonu.md](faz-raporu-sablonu.md)
-- Bu klasör `bundle.py` tarafından otomatik NotebookLM'e yüklenir.
+- `.claude/archives/PHASE_NN_<konu>.md` dosyası oluştur (NN = iki haneli; örn. `PHASE_01_veritabani_temizligi.md` veya `PHASE_14_6_web_drift_setup.md`).
+- Şablonu birebir uygula: önce projedeki `.claude/archives/PHASE_TEMPLATE.md`'yi tercih et (proje-spesifik kurallar olabilir); yoksa skill içindeki [faz-raporu-sablonu.md](faz-raporu-sablonu.md) kullan.
+- `.claude/archives/` klasörü `bundle.py` tarafından otomatik NotebookLM'e yüklenir (config `sync_dirs`'inde).
+
+> **v1 → v2 değişiklik:** Eski `reports/fazNN_*.md` konumu artık kullanılmıyor. Eğer eski raporlar `reports/` altındaysa `.claude/archives/`'a taşı (rename: `fazXX` → `PHASE_XX`).
 
 ## Adım 5 — Dökümanları güncelle
 
-- **ROADMAP.md** — fazın durumunu `[x]` yap; "Faz Durumu Özeti" tablosunu ve tarihini güncelle; çıkış kriterlerini işaretle; sıradaki fazı 🟡 Aktif yap.
-- **MEMORY.md** — bu fazda öğrenilen kalıcı kalıpları, kararları, tuzakları ekle.
-- **QA_REPORTS.md** — çözülen sorunları kapat, yeni keşfedilenleri ekle.
-- **NOTEBOOKLM_SUMMARY.md** (varsa) — güncel proje durumunun kısa özetini yenile.
+v2.0 path'leri (config-driven; varsayılan yollar):
+
+- **`.claude/archives/ROADMAP.md`** — fazın durumunu `[x]` yap; "Faz Durumu Özeti" tablosunu ve tarihini güncelle; çıkış kriterlerini işaretle; sıradaki fazı 🟡 Aktif yap.
+- **`.claude/context/MEMORY.md`** — bu fazda öğrenilen kalıcı kalıpları, kararları, tuzakları ekle.
+- **`.claude/references/QA_REPORTS.md`** — çözülen sorunları kapat, yeni keşfedilenleri ekle.
+- **`.claude/archives/NOTEBOOKLM_SUMMARY.md`** (varsa) — güncel proje durumunun kısa özetini yenile.
 - Gerekiyorsa `docs/` altındaki ilgili kullanım rehberlerini güncelle.
+
+> **v1 → v2 not:** Eski projelerde bu dosyalar root'taydı (`ROADMAP.md`, `MEMORY.md`, …). Config'teki `phase_files` mapping'i ne diyorsa onu kullan; auto-discover olmadığı için config doğru olmalı.
 
 > 🎯 **Kritik alışkanlık:** Dökümanları **commit'ten önce** güncelle. NotebookLM'in en iyi cevap verdiği kaynaklar bunlar — kod değil, bağlam.
 

@@ -1,5 +1,5 @@
 {
-  "_comment": "Kod Fabrikası proje konfigürasyonu. init.sh tarafından üretilir. Bu dosyayı .claude/kod-fabrikasi.config.json olarak kullan.",
+  "_comment": "Kod Fabrikası v2.0 proje konfigürasyonu. init.sh tarafından üretilir. Bu dosyayı .claude/kod-fabrikasi.config.json olarak kullan. v2: Proje yönetim .md dosyaları .claude/{context,decisions,archives,references}/ altına gruplanır; bundle.py auto-discover ile bu klasörleri tarar.",
 
   "drive_folder_path": "/Users/<kullanici>/Library/CloudStorage/GoogleDrive-<email>/Drive'ım/DEV_PROJELERI/<proje-adi>",
   "notebook_id": "00000000-0000-0000-0000-000000000000",
@@ -9,27 +9,24 @@
 
   "sync_to_notebooklm": true,
 
-  "critical_docs": [
-    "ROADMAP.md",
-    "MEMORY.md",
-    "QA_REPORTS.md",
-    "NOTEBOOKLM_SUMMARY.md",
-    "GRAPHIFY_NOTES.md",
-    "FAZ_PROMPT.md",
-    ".claude/ROADMAP.md",
-    ".claude/MEMORY.md"
-  ],
+  "_critical_docs_note": "v2'de boş bırakılırsa bundle.py auto-discover yapar: README.md (root) + .claude/{context,decisions,archives,references}/*.md. Override gerekirse buraya tam path'leri ekle.",
+  "critical_docs": [],
 
   "sync_dirs": [
-    "reports",
+    ".claude/archives",
     "graphify-out"
   ],
 
   "phase_files": {
-    "roadmap": "ROADMAP.md",
-    "memory": "MEMORY.md",
-    "qa": "QA_REPORTS.md",
-    "known_bugs": "KNOWN_BUGS.md"
+    "roadmap": ".claude/archives/ROADMAP.md",
+    "memory": ".claude/context/MEMORY.md",
+    "qa": ".claude/references/QA_REPORTS.md",
+    "known_bugs": ".claude/references/KNOWN_BUGS.md",
+    "notebooklm_summary": ".claude/archives/NOTEBOOKLM_SUMMARY.md",
+    "graphify_notes": ".claude/context/GRAPHIFY_NOTES.md",
+    "faz_prompt": ".claude/decisions/FAZ_PROMPT.md",
+    "phase_template": ".claude/archives/PHASE_TEMPLATE.md",
+    "phase_reports_glob": ".claude/archives/PHASE_*.md"
   },
 
   "allowed_extensions": [

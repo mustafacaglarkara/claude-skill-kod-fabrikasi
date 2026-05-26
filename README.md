@@ -1,8 +1,12 @@
-# Kod Fabrikası — Claude Code Skill
+# Kod Fabrikası — Claude Code Skill (v2.0)
 
 > **EN:** AI-powered software factory for Claude Code. NotebookLM + Graphify + Git hooks + Phase-based Development workflow, all driven by a single per-project config. Portable across all your projects. Documentation and skill content are in Turkish.
+>
+> **v2.0:** Project management `.md` files now live under `.claude/{context,decisions,archives,references}/` — root stays clean. See [CHANGELOG.md](CHANGELOG.md) for migration from v1.
 
 **TR:** AI destekli yazılım fabrikası. NotebookLM + Graphify + Git hook'ları + Faz Bazlı Geliştirme iş akışını her projende aynı disiplinle yürütür. Tek bir `.claude/kod-fabrikasi.config.json` üzerinden tüm proje-spesifik değerleri tutar — bir kere kur, her yerde çalıştır.
+
+**v2.0 değişikliği:** Proje yönetim `.md` dosyaları artık root'u kirletmiyor. ROADMAP/MEMORY/QA gibi dosyalar `.claude/{context,decisions,archives,references}/` altında gruplanıyor. Faz raporları `.claude/archives/PHASE_NN_<konu>.md` formatında. v1 → v2 migration için bkz. [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
@@ -29,7 +33,11 @@ make bundle                                            # ilk Drive + NotebookLM 
 "FAZ_PROMPT'u oku ve sıradaki fazı başlat."
 ```
 
-Claude 6 adımlı disiplinle çalışır: bağlam topla → plan sun → **onay bekle** → uygula + test → faz raporu yaz → ROADMAP/MEMORY/QA güncelle → commit. Post-commit hook NotebookLM'i otomatik eşitler.
+Claude 6 adımlı disiplinle çalışır: bağlam topla → plan sun → **onay bekle** → uygula + test → faz raporu yaz (`.claude/archives/PHASE_NN_*.md`) → ROADMAP/MEMORY/QA güncelle → commit. Post-commit hook NotebookLM'i otomatik eşitler.
+
+### 4. v1 projelerinden v2'ye geçiş
+
+Eski projende `ROADMAP.md`, `MEMORY.md` vs. root'ta mı? [CHANGELOG.md](CHANGELOG.md) → "Migration Rehberi (v1 → v2)" bölümü tek tek komutları gösterir.
 
 ---
 
