@@ -128,6 +128,18 @@ Aşağıdaki dosyaları **konuya göre** oku, başta hepsini değil:
 
 ---
 
-## 🗣️ Sürüm ve Köken
+## 🗣️ Sürüm, Köken ve Güncelleme
 
-Bu skill, projeye özgü `OtoLog/.claude/skills/kod-fabrikasi/`'den proje-bağımsız, config-driven hale getirilerek `~/.claude/skills/kod-fabrikasi/` altına taşındı. Tüm projelerde otomatik kullanılabilir. Her proje kendi `.claude/kod-fabrikasi.config.json`'unu tutar.
+Bu skill **GitHub'da yayında**: https://github.com/mustafacaglarkara/claude-skill-kod-fabrikasi
+
+**Kurulum (yeni makineler için):**
+```bash
+git clone https://github.com/mustafacaglarkara/claude-skill-kod-fabrikasi.git ~/.claude/skills/kod-fabrikasi
+```
+
+**Güncelleme:**
+```bash
+cd ~/.claude/skills/kod-fabrikasi && git pull
+```
+
+Köken: projeye özgü `OtoLog/.claude/skills/kod-fabrikasi/`'den proje-bağımsız, config-driven hale getirilerek `~/.claude/skills/kod-fabrikasi/` altına taşındı. Tüm projelerde otomatik kullanılabilir. Her proje kendi `.claude/kod-fabrikasi.config.json`'unu tutar. Detaylı kullanım: [README.md](README.md)
