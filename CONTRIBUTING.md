@@ -1,85 +1,43 @@
 # Katkıda Bulunma
 
-Bu skill kişisel iş akışından çıktı; başkalarının kullanımı/iyileştirmesi memnuniyetle karşılanır. Fork, issue, PR — hepsi açık.
+Bu skill kişisel iş akışından çıktı; fork, issue, PR açık.
 
----
-
-## Hızlı Yönlendirme
+## Hızlı yönlendirme
 
 | Ne istiyorsun? | Nereye |
 | --- | --- |
-| Skill'i kullanmak | [README.md](README.md) → Hızlı Başlangıç |
-| Sürüm geçmişini görmek | [CHANGELOG.md](CHANGELOG.md) |
-| Bug bildirmek | GitHub Issue aç — repro + log + workaround belirt |
-| Yeni özellik önerisi | GitHub Issue aç ("enhancement" etiketi) — kullanım senaryosunu yaz |
-| Kod katkısı | PR aç — aşağıdaki konvansiyonlara uy |
+| Skill'i kullanmak | [README.md](README.md) |
+| Sürüm geçmişi / geçiş | [CHANGELOG.md](CHANGELOG.md) |
+| Bug bildirmek | GitHub Issue: `kf.py selftest` çıktısı + repro + işletim sistemi |
+| Özellik önerisi | GitHub Issue ("enhancement"): kullanım senaryosu |
+| Kod katkısı | PR; aşağıdaki sözleşme |
 
----
-
-## Geliştirme Kurulumu
+## Geliştirme kurulumu ve test
 
 ```bash
-# Skill'i kendi makinene yereldeki ile bağla (test için)
 git clone https://github.com/mustafacaglarkara/claude-skill-kod-fabrikasi.git ~/.claude/skills/kod-fabrikasi
-cd ~/.claude/skills/kod-fabrikasi
-
-# Bir test projesinde init.sh çalıştır
-cd /tmp && mkdir test-proje && cd test-proje
-git init
-bash ~/.claude/skills/kod-fabrikasi/scripts/init.sh
+# Boş deneme projesinde uçtan uca:
+mkdir /tmp/kf-test && cd /tmp/kf-test && git init -b main
+python ~/.claude/skills/kod-fabrikasi/scripts/kf.py init --framework none --test-cmd "echo ok" --live-cmd "echo deploy" --agents mimar,guvenlik-inceleyici --expert "x-uzmani:X API:src/"
+python .claude/scripts/kf.py hooks && python .claude/scripts/kf.py selftest     # FAIL: 0 olmalı
+echo "A=1" > a.txt && git add -A && git commit -m t                               # pre-commit + post-commit çalışır
+python .claude/scripts/kf.py bundle --dry-run
+# v2 fixture ile migrate --dry-run / migrate --remove-legacy da dene
 ```
 
-İlk olarak [references/tuzaklar.md](references/tuzaklar.md)'yi oku — 10 kritik tuzak. Hiçbirini tetiklemediğinden emin ol.
+Önce [references/tuzaklar.md](references/tuzaklar.md): 26 tuzak. PR hiçbirini tetiklememeli.
 
----
+## PR sözleşmesi
 
-## Pull Request Sözleşmesi
+- **Yapı:** referanslar `references/`, betikler `scripts/` (yalnızca `kf.py` ve `faz_hafiza.py`; yeni bash/Makefile ekleme), şablonlar `assets/agents/` ve `assets/templates/`, örnekler `assets/`. Kökte README/LICENSE/CHANGELOG/CONTRIBUTING/SKILL dışında dosya yok.
+- **Etkileşimsizlik:** betikler soru sormaz (`input()`/`read` yok); her bilgi parametre ya da config.
+- **Platform:** Windows + macOS + Linux. Dosya yazarken `newline="\n"`, yollar `pathlib`, hook komutlarında tam `python_bin`.
+- **Güvenlik:** paket yalnızca `git ls-files`; `.env` okunmaz; NotebookLM güvenlik freni ve id bazlı silme değişmez.
+- **Ajan dosyaları:** `name` = dosya adı; `description` katman + model + ne zaman + "PROAKTİF" (`selftest` kontrol eder); salt okunurlarda Edit/Write yok ve `maxTurns` var; "Verimli çalış" bloğu kelimesi kelimesine.
+- **SKILL.md:** < 200 satır; "İlk kontrol" bloğu ve "ASLA YAPMA" listesi korunur; yeni tuzak öğrenildikçe eklenir, silinmez.
+- **Geriye uyumluluk:** v2 projeler `migrate` ile geçer; breaking change → MAJOR + CHANGELOG'da geçiş rehberi.
+- **Commit:** Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`), tek satır özet.
 
-### Klasör konvansiyonu (v2.0)
+## Felsefe
 
-- Skill içindeki referans dosyalar `references/` altında, scripts `scripts/` altında, örnek dosyalar `assets/` altında.
-- Yeni özellik için yeni klasör eklemeden önce mevcut yapıya sığıp sığmadığını düşün.
-- **Kök dizine yeni `.md` ekleme** — README/LICENSE/CHANGELOG/CONTRIBUTING dışında yenisi root'ta olmamalı.
-
-### Skill yapı kuralı
-
-- `SKILL.md` frontmatter formatı: `name`, `description` (pushy + trigger keyword'lerle dolu), `allowed-tools`. Anthropic Agent Skills spec'ine uyumlu.
-- "İlk Kontrol" bloğu skill her devreye girdiğinde çalışmalı — proje durumunu kontrol eder.
-- "ASLA YAPMA" tuzak listesi: yeni tuzak öğrenildikçe ekle, hiç sileme.
-
-### Backward compatibility
-
-- v1 (root-bazlı) yapıyı destekleyen kod düşürülmeden tutulmalı. Bir kullanıcının eski projesi en az 1 minor version daha çalışmalı.
-- Breaking change → MAJOR version artışı + CHANGELOG'da net migration rehberi.
-
-### Test (skill içi)
-
-- Skill'in kendisinin pubspec/test'i yok (saf .md + script). Test = manuel:
-  1. Boş bir test projesinde `init.sh` çalıştır → klasörler oluşmalı, config doğru üretilmeli
-  2. `make setup-hooks` → hook'lar kurulmalı
-  3. Sahte bir kayıt commit at → post-commit graphify + bundle çalışmalı
-  4. NotebookLM web'de kaynakların güncellendiğini gör
-
-### Commit mesajı
-
-- Conventional Commits önerilir: `feat:`, `fix:`, `docs:`, `chore:`, `refactor:`.
-- Bir satır özet (50 karakter altı tercih edilir).
-- Önemli değişiklik varsa boş satır + paragraf açıklama.
-
----
-
-## Proje Felsefesi
-
-1. **Önce onay, sonra kod** — Skill kullanıcının iş akışını dikte etmez, onaylanan plana göre çalışır. PR'lar da kullanıcı geri bildirimine uyumlu olmalı.
-2. **Tuzaklar SİLİNMEZ** — Geçmiş hatalardan damıtılan `references/tuzaklar.md` zamanla zenginleşir, küçülmez. Yeni öğrenilen tuzak varsa **ekle**.
-3. **Config-driven** — Yeni özellik eklerken: hardcoded path/değer mi yoksa config alanı mı? Config'te tutulabiliyorsa orada tut.
-4. **Türkçe öncelikli** — Skill içeriği Türkçe (kullanıcı tabanı Türk). İngilizce'ye genişletmek istersen `references/en/` gibi paralel dizin aç, ana içeriği değiştirme.
-
----
-
-## Soru/Destek
-
-- GitHub Issue ile temasa geç.
-- Hızlı sohbet için PR'ın "Discussion" bölümünü kullan.
-
-Teşekkürler — her katkı değerli. 🛠️
+1. Önce onay, sonra kod. 2. Kodu yazan kendi işini onaylamaz. 3. Tuzaklar silinmez, eklenir. 4. Config-driven; hardcoded yol yok. 5. Türkçe öncelikli; İngilizce için `references/en/` paralel dizin.

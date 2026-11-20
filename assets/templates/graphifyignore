@@ -1,0 +1,14 @@
+# graphify taramasından çıkar (.gitignore'a ek)
+data/
+*.pdf
+*.png
+*.jpg
+*.webp
+*.lock
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+Cargo.lock
+graphify-out/
+.claude/bundle-out/
+# projeye özel: eski migrasyonlar, üretilmiş kod, ticari veri klasörleri

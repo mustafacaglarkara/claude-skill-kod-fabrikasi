@@ -1,136 +1,92 @@
-# Yeni Projede Kod Fabrikası Kurulumu
+# Kurulum Rehberi (v3) — Claude kurar, betik etkileşimsizdir
 
-Bu rehber, **Kod Fabrikası**'nı yeni bir projede sıfırdan kurma adımlarıdır. `scripts/init.sh` çoğu adımı otomatize eder, ama burada her adımın **ne yaptığı** ve **neden** olduğu açıklanır.
+Kurulumu **Claude Code yürütür**: önce projeyi ucuza keşfeder, sonra kullanıcıya **tek toplu soru** sorar, cevaplarla `kf.py init` çalıştırır, `hooks` ve `selftest` ile doğrular. Betik hiçbir soru sormaz (Claude'un Bash'i etkileşimsizdir; `read` takılır).
 
----
+## 0. Ön koşullar
 
-## 0. Önce kullanıcıya 4 soru sor
+| Araç | Gerekli | Kontrol / kurulum |
+| --- | --- | --- |
+| git | Evet | `git --version` · Windows: `winget install Git.Git` |
+| Python 3.10+ | Evet | `python --version` (hook'lar için sistem Python'u yeter) |
+| graphify (`graphifyy` paketi, çift y) | Önerilir | `uv tool install "graphifyy[sql]" --python 3.13` · `graphify --version`. Python 3.15'te uv ayrı 3.13 indirir; "minor version link" hatasında `uv python list --only-installed` ile tam yol ver. |
+| notebooklm-py | Yalnızca NotebookLM etkinse | `python -m pip install "notebooklm-py[browser]"` · `playwright install chromium` · `notebooklm login`. **Hangi Python'a kurulduysa** config `python_bin` o olmalı. |
+| Google Drive masaüstü | Yalnızca Drive etkinse | Klasör yolu erişilebilir mi (`G:\...`) |
+| Obsidian | Yalnızca Obsidian etkinse | Kasa klasöründe `.obsidian/` var mı |
 
-Kuruluma başlamadan **dur ve sor**. `init.sh` da bu 4 soruyu sorar:
+Skill kopyası: `git clone https://github.com/mustafacaglarkara/claude-skill-kod-fabrikasi.git ~/.claude/skills/kod-fabrikasi`.
 
-1. **Google Drive senkron klasör yolu** — `bundle.py` çıktıyı buraya yazacak (Drive masaüstü uygulaması bunu buluta yükler). Örn: `/Users/<kullanici>/Library/CloudStorage/GoogleDrive-<email>/Drive'ım/DEV_PROJELERI/<proje>`
-2. **NotebookLM notebook ID'si** — yoksa `notebooklm create "Proje Adı"` ile oluştur, dönen UUID'yi kullan.
-3. **Python yolu** — `notebooklm-py` paketinin kurulu olduğu Python (`which python3` ile bul; macOS'ta genelde `/Library/Frameworks/Python.framework/Versions/3.13/bin/python3`).
-4. **Projenin framework'ü** — `flutter` / `go` / `php-laravel` / `python` / `node` / `none`. `pre-commit` test komutu buna göre seçilir.
+## 1. Keşif (değişiklik yapmadan, ucuz)
 
-Bu 4 bilgi olmadan config dosyası eksik doldurulur.
+`kf.py check` sonra:
+- Manifestler (`package.json`, `pyproject.toml`, `go.mod`, `Cargo.toml`, `pubspec.yaml`, `composer.json`, Dockerfile): framework ve sürüm.
+- Çalışan komutlar: test, lint, build. **Testler veritabanını silebilir**: test ayarını oku, ayrı test DB var mı; emin değilsen çalıştırma, sor.
+- Mevcut AI ayarları: `CLAUDE.md`, `.claude/settings*.json`, `.claude/agents`, hook'lar → **birleştirilir**, üzerine yazılmaz.
+- Gizli/ticari dosyalar: `.env*`, `*.pem`, `*.key`, `*bilgi*.txt`, `*password*`, `*.db`, SQL dökümleri, müşteri verisi. İçeriğini yazdırma; `.gitignore`'da mı kontrol et (`git check-ignore -v`).
+- Mevcut planlama belgeleri (ROADMAP, PROGRESS vb.): varsa korunur, `migrate` taşır.
+- Canlıya / dış sisteme yazan komutlar (deploy, migrate reset, toplu silme, eBay/ödeme gönderimi).
 
----
+## 2. Tek toplu soru (`AskUserQuestion`, öneri önce)
 
-## 1. Bağımlılıkları kur (kullanıcıdan onay alarak)
+Kodun söyleyemediği şeyler; en fazla 4 soru, çok seçimli olabilir:
 
-```bash
-# Mimari haritalayıcı
-python3 -m pip install graphifyy
+1. **Test ve derleme komutları** doğru mu? (keşiften önerilenler) → `--test-cmd`, `--build-cmd`
+2. **Canlıya yazan / onay isteyen komutlar** (keşiften adaylar + "yok") → `--live-cmd` (settings `ask` listesine girer, ajanlar çalıştırmaz)
+3. **Yüksek riskli alanlar** (çoklu: auth/oturum, ödeme, kişisel veri, veritabanı/migration, altyapı/deploy, projeye özel) → `--risk`
+4. **Ekip ve entegrasyonlar** (çoklu): `mimar`, `guvenlik-inceleyici`, alan uzmanı (ad + alan + klasör), Drive klasörü, NotebookLM notebook id, Obsidian kasa yolu → `--agents`, `--expert`, `--drive`, `--notebook`, `--obsidian`
 
-# NotebookLM API + tarayıcı eklentisi
-python3 -m pip install "notebooklm-py[browser]"
-playwright install chromium
+Dil (`--language tr|en`) ve commit kuralı ("commit/push yalnızca istenirse") varsayılan; kullanıcı aksini söylemediyse sorma. Ana oturum model/effort ayarı **sorulmaz, yazılmaz**.
 
-# Google hesabıyla NotebookLM'e giriş (tarayıcı açılır)
-notebooklm login
-
-# Doğrula
-notebooklm list
-graphify --version
-```
-
-> ⚠️ `notebooklm-py` **hangi Python'a kurulduysa** `bundle.py` o Python ile çalışmalı (bkz. [tuzaklar.md](tuzaklar.md) — Tuzak #3).
-
----
-
-## 2. `scripts/init.sh` ile interaktif kurulum
-
-`~/.claude/skills/kod-fabrikasi/scripts/init.sh` proje root'undan çalıştırılır:
+## 3. Kurulum
 
 ```bash
-cd <proje-root>
-bash ~/.claude/skills/kod-fabrikasi/scripts/init.sh
+python ~/.claude/skills/kod-fabrikasi/scripts/kf.py init \
+  --framework node --test-cmd "npm test" --test-cmd "npm run lint" --build-cmd "npm run build" \
+  --live-cmd "npm run deploy" --risk auth --risk payments \
+  --agents mimar,guvenlik-inceleyici \
+  --expert "odeme-uzmani:Ödeme sağlayıcı API:src/payments/:https://docs.ornek.test" \
+  [--drive "G:\Drive'ım\DEV_PROJELERI\proje"] [--notebook <uuid>] [--obsidian "D:\obsidian_kasalar\proje"] \
+  [--python "C:\...\python.exe"] [--graphify graphify] [--no-graphify]
 ```
 
-`init.sh` ne yapar:
+`init` ne yapar: `.claude/{context,decisions,archives,references,agents,hooks,scripts}`; config (`version: 3`); eksik planlama belgeleri şablondan (`{{PROJECT_NAME}}`, tarih, komutlar doldurulur); ajan dosyaları (core + seçilen isteğe bağlı + alan uzmanları); `kf.py` ve `faz_hafiza.py` kopyası; `settings.json` **birleştirme** (deny `.env`/pem/key, ask push/reset/canlı komutlar, SessionStart hook); `.gitignore`, `.gitattributes` (LF), `.graphifyignore`, `.graphifyrc`; `CLAUDE.md`'ye işaretli "Alt ajanlar ve proje hafızası" bölümü (varsa güncellenir). Config varsa `init` durur (exit 2): `repair`, `migrate` ya da `--force`.
 
-1. 4 soruyu sorar (yukarıdaki).
-2. `.claude/kod-fabrikasi.config.json` üretir.
-3. Skill'in `scripts/` altındaki `bundle.py`, `Makefile`, `setup-hooks.sh` template'lerini **proje root'a** kopyalar.
-4. `.gitignore`'a `graphify-out/`, `__pycache__/`, `.claude/settings.local.json` ekler (yoksa).
-5. Kullanıcıya sonraki adımları söyler: `git init` (gerekirse) → `make setup-hooks` → `make bundle`.
-
-**`--repair` modu:** Mevcut bir projede config var ama bazı dosyalar eksikse:
+Sonra:
 ```bash
-bash ~/.claude/skills/kod-fabrikasi/scripts/init.sh --repair
-```
-Sadece eksik dosyaları tamamlar, mevcut config'i bozmaz.
-
----
-
-## 3. Git hook'larını kur
-
-```bash
-git init           # repo değilse
-make setup-hooks   # pre-commit + post-commit hook'ları üretir
+git init -b main                              # repo değilse; Drive/Obsidian sürüm kontrolü değildir
+python .claude/scripts/kf.py hooks            # pre-commit gizli bilgi taraması + post-commit end-phase
+python .claude/scripts/kf.py selftest         # FAIL yoksa kurulum bitti
+graphify update .                             # ilk harita (graphify etkinse)
+python .claude/scripts/kf.py bundle --dry-run # ne paketlenecek (Drive/NotebookLM etkinse gerçek çalıştır)
 ```
 
-`make setup-hooks` aslında `bash setup-hooks.sh` çalıştırır. `setup-hooks.sh` config'ten `framework`'ü okur ve uygun `pre-commit` (test) ve `post-commit` (graphify + bundle) hook'ları üretir.
+İsteğe bağlı: `graphify install --project` (`/graphify` skill'i + PreToolUse hatırlatma hook'u ekler; `settings.json.graphify-bak` yedeğini kontrol edip sil). **`graphify hook install` KULLANMA**: post-commit'in tek sahibi `kf.py`'dir ve `end-phase` içinde `graphify update` zaten çalışır.
 
----
+## 4. İlk commit öncesi gizli bilgi denetimi
 
-## 4. Kritik dökümanları oluştur (yoksa)
+`kf.py secret-scan` (izlenen tüm dosyalar) → temiz olmalı. Eşleşme çıkarsa dosyayı `.gitignore`'a al ya da değeri `.env`'e taşı; gerçek sır izlenen dosyadaysa commit etme, kullanıcıya söyle. Pre-commit aynı taramayı staged dosyalarda yapar; bilinçli atlama `KF_SKIP_SECRET=1` (önerilmez).
 
-Aşağıdaki dosyaları kök dizinde boş iskelet olarak oluştur:
+Commit ve remote/push: yalnızca kullanıcı isterse.
 
-- `ROADMAP.md` — fazların listesi + "Faz Durumu Özeti" tablosu
-- `MEMORY.md` — teknik kararlar, öğrenilen kalıplar
-- `QA_REPORTS.md` — testler, bilinen sorunlar
-- `NOTEBOOKLM_SUMMARY.md` — proje durumu kısa özet
-- `GRAPHIFY_NOTES.md` — kendi mimari gözlemlerin (opsiyonel)
-- `reports/` — faz raporlarının yazılacağı klasör (`mkdir -p reports`)
+## 5. Teslim
 
-Bu isimler config'teki `critical_docs` ve `phase_files`'da listelidir. Farklı isim istersen önce config'i değiştir.
+Kullanıcıya söyle: ne kuruldu (ajan listesi rolüyle), `selftest` sonucu, `settings.json`'da nelerin değiştiği (deny/ask kuralları, hook; `ask` kuralı "her zaman izin ver" seçilse bile sorar), ajanların birkaç saniyede yüklendiği ("not found" görürse yeni oturum), git hook'larının kurulduğu, hiçbir şeyin commit edilmediği. İlk işi öner: Faz 0 keşif → PROGRESS/ROADMAP doldurma → ilk ADR.
 
----
-
-## 5. İlk eşitleme ve doğrulama
+## v1 / v2 → v3 geçişi
 
 ```bash
-make bundle                # ilk eşitleme: Drive + NotebookLM dolar
-notebooklm source list --notebook <NOTEBOOK_ID>
-# Çıktıda her başlık BENZERSİZ olmalı (çift kaynak yoksa OK)
+python ~/.claude/skills/kod-fabrikasi/scripts/kf.py migrate --dry-run     # ne taşınacak
+python ~/.claude/skills/kod-fabrikasi/scripts/kf.py migrate --remove-legacy
+python .claude/scripts/kf.py hooks && python .claude/scripts/kf.py selftest
 ```
 
-**Beklenen çıktı:**
-- `tum_kodlar.txt` — tüm kaynak kod tek dosyada
-- `ROADMAP.md`, `MEMORY.md`, `QA_REPORTS.md` — Drive'a kopyalanmış
-- `reports/`, `graphify-out/` — alt klasör olarak Drive'da
+Taşınanlar (`git mv`): kök ya da `.claude/` altındaki ROADMAP/MEMORY/QA/KNOWN_BUGS/NOTEBOOKLM_SUMMARY/GRAPHIFY_NOTES/FAZ_PROMPT → v3 konumları; `reports/fazNN_x.md` → `.claude/archives/PHASE_NN_x.md`. Eski config yedeklenir (`.v2.bak`), v3 şemaya çevrilir (Drive/NotebookLM değerleri `integrations` altına; `framework`'ten `test_commands`). Kökteki Kod Fabrikası imzalı `bundle.py`/`Makefile`/`setup-hooks.sh` `--remove-legacy` ile kaldırılır. Eski post-commit kök `bundle.py`'yi çağırır: `kf.py hooks` yeniden yazar (varsa yabancı hook `.pre-kf.bak` olarak yedeklenir). Drive düzeni değişir (`kod/`, `belgeler/`, `claude__archives/`): eski kök dosyalar ilk `bundle`'da `stale_patterns` ile temizlenir; NotebookLM birebir aynalandığı için eski kaynaklar id bazında silinir.
 
-Eğer NotebookLM'de çift kaynak görüyorsan bir kez daha `make bundle` çalıştır — düzeltilmiş kod id bazında temizler.
+## Kontrol listesi
 
----
-
-## 6. Kullanıcıya ilk faz akışını öğret
-
-Sistem hazır. Kullanıcıya günlük döngüyü göster:
-
-```text
-Kod yaz → ROADMAP/MEMORY/QA güncelle → git commit
-                                          │
-                            post-commit ──┤
-                                          ├─ graphify (mimari harita)
-                                          └─ bundle.py (Drive + NotebookLM ayna)
-
-Faz başlatmak için: "FAZ_PROMPT'u oku ve sıradaki fazı başlat."
-```
-
----
-
-## Kurulum kontrol listesi (Claude bunu tamamlamadan "bitti" deme)
-
-- [ ] Kullanıcıdan 4 bilgi alındı (Drive yolu, Notebook ID, Python yolu, framework)
-- [ ] `graphifyy` + `notebooklm-py` kuruldu, `notebooklm login` yapıldı
-- [ ] `init.sh` çalıştırıldı, `.claude/kod-fabrikasi.config.json` oluştu
-- [ ] `bundle.py`, `Makefile`, `setup-hooks.sh` proje root'una kopyalandı
-- [ ] `.gitignore`'a `graphify-out/`, `__pycache__/` eklendi
-- [ ] `make setup-hooks` çalıştırıldı, hook'lar kuruldu
-- [ ] Kritik dökümanlar (ROADMAP, MEMORY, QA_REPORTS) ve `reports/` klasörü mevcut
-- [ ] `make bundle` çalıştı; `notebooklm source list` çıktısında **çift kaynak yok**
-- [ ] [tuzaklar.md](tuzaklar.md)'daki 10 tuzaktan hiçbirine düşülmedi
+- [ ] Keşif yapıldı; test DB ayrımı ve gizli dosyalar anlaşıldı
+- [ ] Tek toplu soru soruldu, cevaplar `init` parametrelerine döküldü
+- [ ] `kf.py init` çalıştı; `settings.json` birleştirildi (kullanıcının kuralları korundu)
+- [ ] `kf.py hooks` kuruldu; `graphify hook install` kullanılmadı
+- [ ] `kf.py selftest` FAIL vermiyor
+- [ ] `kf.py secret-scan` temiz; `.env`, db, döküm `git check-ignore` ile ignore'da
+- [ ] Kullanıcıya teslim raporu verildi; commit atılmadı

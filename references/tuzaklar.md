@@ -1,182 +1,93 @@
-# 10 Kritik Tuzak — Bunlara SAKIN Düşme
+# Kritik Tuzaklar — Bunlara SAKIN Düşme
 
-Bu liste, sistemin geçirdiği hatalardan damıtıldı. `bundle.py` veya `setup-hooks.sh`'yi "sadeleştireyim / iyileştireyim" derken bu hatalara **geri dönme**.
+Sistemin geçirdiği gerçek hatalardan damıtıldı. `kf.py`'yi "sadeleştireyim / iyileştireyim" derken bu hatalara **geri dönme**. Liste yalnızca büyür; tuzak silinmez.
 
----
+## NotebookLM / paketleme (kf.py bundle)
 
-## 1. NotebookLM kaynaklarını başlığa göre dict'leme
+### 1. Kaynakları başlığa göre dict'leme
+`{s.title: s.id}` aynı başlıktan birden fazla kaynağı gizler → çiftler her çalıştırmada birikir. **Liste olarak dolaş, id bazında sil.** (`notebooklm_mirror`)
 
-```python
-# YANLIŞ — aynı başlıktan birden fazla kaynak GİZLENİR
-title_to_id = {s.title: s.id for s in sources}
+### 2. Alt klasör dosyalarında başlık çakışması
+`add_file` başlığı dosya adından türetir; `a/rapor.md` ile `b/rapor.md` ikisi de "rapor.md" → biri diğerini ezer. **Göreli yolu `__` ile düzleştir**, staging klasöründen yükle. (`flat()`, `collect_sources`)
 
-# DOĞRU — kaynakları LİSTE olarak dolaş, id bazında sil
-for s in sources:
-    if s.title not in desired_titles:
-        await client.sources.delete(notebook_id, s.id)
-```
+### 3. `python` PATH varsayma
+Git hook'ları sınırlı PATH ile çalışır; `notebooklm-py` belirli bir Python'a kuruludur. **Config `python_bin` tam yol**; hook ve SessionStart komutu onu kullanır. Belirti: hook'ta `ModuleNotFoundError: notebooklm` → `kf.py selftest`.
 
-**Neden:** NotebookLM aynı başlıktan birden fazla kaynak tutabilir (race condition, yarım kalan yükleme). Dict yaparsan ikinciyi kaybedersin → çiftler her çalıştırmada birikir.
+### 4. Boş klasör = felaket (güvenlik freni)
+Drive geçici erişilemezse "klasörde olmayan = sil" mantığı TÜM NotebookLM kaynaklarını siler. **`collect_sources` boş dönerse dokunma.** Freni KALDIRMA.
 
-**Mevcut bundle.py'de:** `sync_to_notebooklm_async()` doğru çalışıyor (`old_sources` listesi olarak dolaşıyor).
+### 5. Büyük HTML / JSON yükleme
+`graph.html` (~8 MB), `graph.json` NotebookLM'i boğar. İzinli uzantılar yalnızca `.md/.txt/.pdf`; `graphify-out`'tan yalnızca `.md` kopyalanır. Genişletme.
 
----
+### 6. `copytree(dirs_exist_ok=True)`
+Silinen/yeniden adlandırılan rapor hedefte kalır, birikir. **Önce `rmtree`, sonra `copytree`** (birebir ayna). `replace_dir`.
 
-## 2. Alt klasör dosyalarında başlık çakışması
+### 7. Aynı içeriği hem `.md` hem `.txt` yazma
+NotebookLM ikisini ayrı kaynak sayar; çift atıf. Tek format.
 
-```python
-# YANLIŞ — add_file başlığı dosya adından türetir
-client.sources.add_file(notebook_id, "a/rapor.md")   # title: "rapor.md"
-client.sources.add_file(notebook_id, "b/rapor.md")   # title: "rapor.md" ← çakıştı!
+### 8. Faz raporlarını `sync_dirs` dışında bırakma
+Raporlar en değerli bağlamdır. `.claude/archives` `sync_dirs`'te kalır; raporlar başka yere yazılmaz.
 
-# DOĞRU — göreli yolu '__' ile düzleştir
-title = rel_path.replace(os.sep, '__')   # "a__rapor.md"
-# Sonra geçici staging dir'e bu adla kopyalayıp yükle
-```
+### 9. `.gitignore`'u yok sayan paketleme (v2'de vardı)
+v2 `bundle.py` `os.walk` + uzantı listesi (`.sql`, `.json`) ile dolaşırdı: `.env.json`, SQL dökümleri, veri dosyaları Drive'a ve Google'a gidebilirdi. **v3: paket yalnızca `git ls-files` çıktısından oluşur.** `os.walk`'a geri dönme. İzlenen veri dosyası istenmiyorsa `bundle.skip_prefixes`.
 
-**Neden:** NotebookLM kaynak başlığı dosya adından otomatik türer. Alt klasörde aynı isimli dosyalar → ikincisi birincisini ezer.
+### 10. Düzleştirilen adın nokta ile başlaması
+`.claude/archives/X.md` → `.claude__archives__X.md` olur; toplayıcı "gizli dosya" sanıp atlar, NotebookLM'e hiç gitmez. `flat()` baştaki noktayı kaldırır (`claude__archives__X.md`). Bu davranışı koru.
 
-**Mevcut bundle.py'de:** `collect_drive_sources()` ve `upload_as_source()` bunu yapıyor.
+### 11. `__pycache__` ve `bundle-out` commit etme
+`.gitignore`: `__pycache__/`, `graphify-out/`, `.claude/bundle-out/`, `.claude/settings.local.json`. `init` ekler.
 
----
+## Ajanlar / orkestrasyon
 
-## 3. `python3` PATH varsayma
+### 12. Etkileşimli kurulum betiği
+v2 `init.sh` `read -rp` ile soru sorardı. Claude'un Bash'i etkileşimsizdir: `read` boş döner ya da takılır; betik Claude tarafından hiç çalıştırılamaz. **Her bilgi parametreyle** (`kf.py init --...`); soruları `AskUserQuestion` toplu sorar.
 
-```bash
-# YANLIŞ — git hook sınırlı PATH ile çalışır
-python3 bundle.py   # ModuleNotFoundError: notebooklm
+### 13. İki post-commit sahibi
+`graphify hook install` kendi post-commit'ini yazar; `kf.py hooks` da yazar. İkisi birden: harita iki kez üretilir ya da biri diğerini ezer. **Tek sahip `kf.py`**; `end-phase` içinde `graphify update` çağrılır. Yabancı hook varsa `kf.py hooks` onu `.pre-kf.bak` olarak yedekler ve uyarır.
 
-# DOĞRU — TAM YOL kullan (config'ten oku)
-PYTHON_BIN=$(python3 -c "import json; print(json.load(open('.claude/kod-fabrikasi.config.json'))['python_bin'])")
-$PYTHON_BIN bundle.py
-```
+### 14. Kodu yazan ajana kendi işini doğrulatma
+`gelistirici`'ye "testleri de koş ve incele" demek bağımsızlığı yok eder. `tester` ve `reviewer` kod yazamaz (tools'ta Edit/Write yok); `selftest` bunu denetler. Bu ayrımı bozma.
 
-**Neden:** `notebooklm-py` belirli bir Python interpreter'a kuruludur. Git hook'ları (ve cron, systemd) genelde sınırlı PATH ile çalışır → `python3` farklı bir Python'a denk gelir → `from notebooklm import ...` patlayarak tüm bundle'ı çökerir.
+### 15. Bitmiş ajana ikinci görev
+Eski transkript her adımda yeniden okunur (ölçüm: ikinci görevin token'larının %73'ü eski iş). Yeni iş → yeni ajan. Yalnızca aynı dosyalarda kısa düzeltme turu için devam ettir.
 
-**Mevcut setup-hooks.sh'da:** `PYTHON_BIN` tam yola sabitlenmiş; config-driven versiyonda da öyle olacak.
+### 16. Başarısız brifi aynı ajana tekrar göndermek
+Aynı bağlam, aynı sonuç. Bir kademe yükselt (`gelistirici` → `mimar`), brife başarısızlığın kanıtını ekle.
 
----
+### 17. Ajanlarda `git stash` / `git checkout --` / `git reset`
+Paralel ajanlar aynı çalışma kopyasındadır; birinin stash'i diğerinin yarım işini yutar (yaşandı). Yeni testin kırmızı olduğunu kanıtlamak için dosyanın **geçici kopyası** kullanılır. `settings.json` bu komutları `ask`'a koyar.
 
-## 4. Boş klasör = felaket (güvenlik freni)
+### 18. Yazan ajanlara `maxTurns`
+Sınıra çarpan `gelistirici` yarım iş bırakır ve rapor vermez. `maxTurns` yalnızca salt okunurlarda (40–80).
 
-```python
-# YANLIŞ — boş listeyle çağırırsan TÜM NotebookLM kaynaklarını siler
-drive_sources = collect_drive_sources()   # bir hatayla boş döndü
-for s in old_sources:
-    if s.title not in {t for t, _ in drive_sources}:   # set boş!
-        delete(s.id)   # HEPSİ silinir
+### 19. Planlama belgelerini herkesin yazması
+Format dağılır, hook başlıkları bulamaz, ADR numaraları çakışır. **Yalnızca `faz-arsivcisi`** yazar; başlık adları (`## Durum`, `## Günlük`, `## Sıradaki adım`, `## ADR-NNN:`, `## OPEN-NNN:`) değişmez.
 
-# DOĞRU — boş ise hiçbir şeye dokunma
-if not drive_sources:
-    print("⚠️ Drive klasörü boş — güvenlik için NotebookLM'e dokunulmuyor.")
-    return
-```
+### 20. Ana oturumun modelini projeye yazmak
+`settings.json` → `model`/`effortLevel` kullanıcının o projedeki varsayılan oturumunu değiştirir; kullanıcı fark etmez, maliyet sürpriz olur. Skill yazmaz; model yalnızca ajan dosyalarında.
 
-**Neden:** Drive masaüstü uygulaması geçici olarak klasörü erişilemez yapabilir; Drive yolu yanlış yazılmış olabilir. "Klasörde olmayan = sil" mantığı boş klasörde tüm NotebookLM kaynaklarını yok eder.
+### 21. İnceleme notunu doğrulamadan aktarmak
+Bir reviewer notu ilanın kendi videosunu "sosyal bağlantı" sandı; bir "tutarlılık düzeltmesi" sahibin görünümünü bozdu. Bulguyu koda bakarak teyit et, sonra düzeltme turuna gönder.
 
-**Mevcut bundle.py'de:** Güvenlik freni var (`sync_to_notebooklm_async` başında). **KALDIRMA.**
+## Süreç
 
----
+### 22. Adım 2'yi atlayıp koda dalma
+Kullanıcı onayı olmadan kod değişikliği YOK. "Onaysız devam et" denirse: "plan üzerinde ne değiştirelim?"
 
-## 5. `__pycache__` commit etme
-
-`bundle.py` import edilince `__pycache__/` oluşur. `.gitignore`'a ekle:
-
-```gitignore
-__pycache__/
-graphify-out/
-.claude/settings.local.json
-```
-
-`init.sh` bunları otomatik ekler.
-
----
-
-## 6. Büyük HTML / JSON yükleme
-
-```python
-# YANLIŞ — graph.html (~8 MB) NotebookLM'i boğar / hata verir
-NOTEBOOKLM_ALLOWED_EXTENSIONS = {'.md', '.txt', '.pdf', '.html', '.json'}   # !
-
-# DOĞRU — sadece metin tabanlı, NotebookLM dostu uzantılar
-NOTEBOOKLM_ALLOWED_EXTENSIONS = {'.md', '.txt', '.pdf'}
-```
-
-**Neden:** NotebookLM web UI büyük HTML/JSON dosyalarında kasar veya kelime limitini aşar. Graphify'ın `graph.html` (~8 MB), `graph.json`, `manifest.json` çıktıları bu kategoridedir.
-
-**Çıkış yolu:** Graphify'ın `GRAPH_REPORT.md` çıktısı (kısa metin özeti) zaten NotebookLM'e gider — yapısal bilgi için yeterli.
-
----
-
-## 7. `copytree(dirs_exist_ok=True)` ile eski dosyalar birikir
-
-```python
-# YANLIŞ — hedefte eski dosyalar kalır, birikir
-shutil.copytree(src, dest, dirs_exist_ok=True)
-
-# DOĞRU — önce sil, sonra kopyala (birebir ayna)
-shutil.rmtree(dest, ignore_errors=True)
-shutil.copytree(src, dest)
-```
-
-**Neden:** Faz raporu silindiyse veya yeniden adlandırıldıysa, `dirs_exist_ok=True` eski dosyayı bırakır. Drive'da artık dosyalar birikir → NotebookLM'de eski içerik görünür.
-
-**Mevcut bundle.py'de:** `SYNC_DIRS` döngüsü `rmtree` + `copytree` ile çalışıyor.
-
----
-
-## 8. `reports/` klasörünü `sync_dirs`'e koymama
-
-```json
-// YANLIŞ — faz raporları NotebookLM'e hiç gitmez
-"sync_dirs": ["graphify-out"]
-
-// DOĞRU — reports da dahil
-"sync_dirs": ["reports", "graphify-out"]
-```
-
-**Neden:** Faz raporları (`reports/fazNN_*.md`) en değerli bağlamdır — sonraki fazlar bunları okur. `sync_dirs`'e dahil değilse NotebookLM görmez, soru sorulduğunda "bilmiyorum" der.
-
----
-
-## 9. Aynı içeriği hem `.md` hem `.txt` olarak yazma
-
-```python
-# YANLIŞ — NotebookLM'de aynı içerik çift kaynak olarak görünür
-write_to_drive("tum_kodlar.md", content)
-write_to_drive("tum_kodlar.txt", content)   # !!
-
-# DOĞRU — tek format seç (genelde .txt — NotebookLM .md'yi markdown render eder, kodda render istemiyoruz)
-write_to_drive("tum_kodlar.txt", content)
-```
-
-**Neden:** NotebookLM iki kaynağı ayrı sayar; sorularda çift atıf çıkar, kaynak listesi şişer.
-
----
-
-## 10. Runtime doğrulamayı atlayıp "yeşil" yazma
-
+### 23. Runtime doğrulamayı atlayıp "yeşil" yazma
 ```markdown
 # YANLIŞ
-## Test Sonuçları
 - Tüm testler yeşil ✅
-
-# DOĞRU (eğer test çalıştırılamadıysa)
-## Test Sonuçları
-- `flutter test` çalıştırılamadı: bağımlılıklar kuruluma uygun değil.
-- Runtime doğrulama BEKLİYOR — sonraki sessionda test çalıştırılmalı.
+# DOĞRU (çalıştırılamadıysa)
+- `flutter test` çalıştırılamadı: <sebep>. Runtime doğrulama BEKLİYOR.
 ```
+Dürüstlük > optimizm. PROGRESS "Bitti" yalnızca kanıtla.
 
-**Neden:** "Yeşil" yazıp commit atarsan sonraki AI veya kullanıcı sisteme güvenir. Sonra bug çıkarsa kaynağı bulmak zor olur. **Dürüstlük > optimizm.**
+### 24. Testlerin dev veritabanını silmesi
+Test ayarı dev DB'ye bakıyorsa `flutter test`/`pytest` veriyi uçurur (yaşandı). Ayrı test DB'si doğrulanmadan `tester` koşmaz, raporlar.
 
----
+### 25. Kök dizine yönetim dosyası / betik bırakma
+README dışında AI yönetim `.md`'si ve `bundle.py`/`Makefile` kökte durmaz; `migrate --remove-legacy` temizler. `CLAUDE.md` 200 satırı aşarsa `.claude/rules/`.
 
-## Bonus: 11. Mevcut kodu "iyileştireyim" diye yeniden yazma
-
-`bundle.py` ve `setup-hooks.sh` bu 10 tuzaktan geçerek olgunlaştı. Refactor etmek istersen:
-
-1. **Önce bu listeyi oku.**
-2. **Yapısal değişiklik öneriyorsan kullanıcıya gerekçeli sun, ONAY al** (FAZ_PROMPT Adım 2 zaten bunu söylüyor).
-3. **Değişiklikten sonra hızlı duman testi:** `make bundle` çalıştır + `notebooklm source list` ile çift kaynak yok mu kontrol et.
-
-Geçmişte ne kazandık, ne kaybetmemeli — bunu bilen tek belge bu dosya.
+## Bonus: 26. Mevcut kodu "iyileştireyim" diye yeniden yazma
+`kf.py` bu tuzaklardan geçerek olgunlaştı. Refactor istiyorsan: 1) bu listeyi oku, 2) yapısal değişikliği gerekçeli sun ve ONAY al, 3) sonra `kf.py selftest` + deneme projesinde `init`/`migrate`/`bundle --dry-run` + (NotebookLM etkinse) `notebooklm source list` ile çift kaynak yok mu kontrol et.

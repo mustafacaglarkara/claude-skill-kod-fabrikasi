@@ -1,54 +1,80 @@
 {
-  "_comment": "Kod Fabrikası v2.0 proje konfigürasyonu. init.sh tarafından üretilir. Bu dosyayı .claude/kod-fabrikasi.config.json olarak kullan. v2: Proje yönetim .md dosyaları .claude/{context,decisions,archives,references}/ altına gruplanır; bundle.py auto-discover ile bu klasörleri tarar.",
+  "_comment": "Kod Fabrikasi v3 proje konfigurasyonu. `kf.py init` uretir; .claude/kod-fabrikasi.config.json olarak durur. Bos/yok olan entegrasyon atlanir (Drive, NotebookLM, Obsidian hepsi istege bagli). Cekirdek: git + alt ajanlar + faz hafizasi + graphify.",
+  "version": 3,
+  "project_name": "<proje-adi>",
+  "language": "tr",
 
-  "drive_folder_path": "/Users/<kullanici>/Library/CloudStorage/GoogleDrive-<email>/Drive'ım/DEV_PROJELERI/<proje-adi>",
-  "notebook_id": "00000000-0000-0000-0000-000000000000",
-  "python_bin": "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3",
-  "graphify_bin": "/Library/Frameworks/Python.framework/Versions/3.13/bin/graphify",
-  "framework": "flutter",
+  "python_bin": "C:\\Users\\<kullanici>\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+  "graphify_bin": "graphify",
 
-  "sync_to_notebooklm": true,
+  "framework": "node",
+  "test_commands": ["npm test", "npm run lint"],
+  "build_commands": ["npm run build"],
 
-  "_critical_docs_note": "v2'de boş bırakılırsa bundle.py auto-discover yapar: README.md (root) + .claude/{context,decisions,archives,references}/*.md. Override gerekirse buraya tam path'leri ekle.",
-  "critical_docs": [],
+  "_live_write_commands_note": "Canliya / dis sisteme yazan ya da geri alinamaz komutlar. settings.json `ask` listesine girer; tester ve gelistirici ajanlari bunlari ASLA calistirmaz.",
+  "live_write_commands": ["npm run deploy", "prisma migrate reset"],
 
-  "sync_dirs": [
-    ".claude/archives",
-    "graphify-out"
-  ],
+  "_high_risk_areas_note": "Bu alanlara dokunan her degisiklik reviewer + (varsa) guvenlik-inceleyici'den gecer; buyuk olanlar mimar'a gider.",
+  "high_risk_areas": ["auth", "payments", "migrations"],
+
+  "agents": {
+    "core": ["kesifci", "gelistirici", "tester", "reviewer", "faz-arsivcisi"],
+    "optional": ["mimar", "guvenlik-inceleyici"],
+    "domain_experts": [
+      { "name": "odeme-uzmani", "domain": "Odeme saglayici API", "paths": ["src/payments/"], "docs_url": "" }
+    ],
+    "max_parallel_editors": 3
+  },
 
   "phase_files": {
     "roadmap": ".claude/archives/ROADMAP.md",
+    "progress": ".claude/archives/PROGRESS.md",
+    "decisions": ".claude/decisions/DECISIONS.md",
+    "open_questions": ".claude/decisions/OPEN_QUESTIONS.md",
     "memory": ".claude/context/MEMORY.md",
     "qa": ".claude/references/QA_REPORTS.md",
     "known_bugs": ".claude/references/KNOWN_BUGS.md",
     "notebooklm_summary": ".claude/archives/NOTEBOOKLM_SUMMARY.md",
     "graphify_notes": ".claude/context/GRAPHIFY_NOTES.md",
-    "faz_prompt": ".claude/decisions/FAZ_PROMPT.md",
     "phase_template": ".claude/archives/PHASE_TEMPLATE.md",
     "phase_reports_glob": ".claude/archives/PHASE_*.md"
   },
 
-  "allowed_extensions": [
-    ".go", ".proto", ".sql",
-    ".js", ".ts", ".tsx", ".jsx",
-    ".py", ".json", ".md",
-    ".yml", ".yaml", ".html", ".css",
-    ".php", ".dart", ".swift", ".kt",
-    ".java", ".rb", ".rs"
-  ],
+  "integrations": {
+    "graphify": { "enabled": true, "viz_node_limit": 15000 },
+    "drive": {
+      "enabled": false,
+      "folder_path": "G:\\Drive'im\\DEV_PROJELERI\\<proje-adi>"
+    },
+    "notebooklm": {
+      "enabled": false,
+      "notebook_id": "",
+      "allowed_extensions": [".md", ".txt", ".pdf"],
+      "ignore_dirs": ["cache", "__pycache__"],
+      "max_file_size_mb": 50
+    },
+    "obsidian": {
+      "enabled": false,
+      "vault_path": "D:\\obsidian_kasalar\\<proje-adi>"
+    }
+  },
 
-  "ignore_dirs": [
-    "node_modules", ".git", ".idea", ".vscode",
-    "vendor", ".venv", "venv", "dist", "build",
-    "graphify-out", "__pycache__", "storage",
-    "public", "cache", "views", "snapshots",
-    ".dart_tool", ".gradle", ".next", "target"
-  ],
+  "bundle": {
+    "_note": "Paket SADECE git'in izledigi dosyalardan (git ls-files) olusur; .env, dump, veritabani dosyalari git disinda oldugu icin hic girmez. Drive kapaliysa cikti .claude/bundle-out/ (gitignore) altina yazilir.",
+    "allowed_extensions": [
+      ".go", ".proto", ".sql", ".js", ".mjs", ".ts", ".tsx", ".jsx", ".vue", ".svelte", ".astro",
+      ".py", ".json", ".md", ".yml", ".yaml", ".toml", ".html", ".css", ".scss",
+      ".php", ".dart", ".swift", ".kt", ".java", ".rb", ".rs", ".cs", ".sh"
+    ],
+    "skip_files": ["package-lock.json", "pnpm-lock.yaml", "yarn.lock", "composer.lock", "pubspec.lock", "Cargo.lock", "poetry.lock"],
+    "skip_prefixes": [".claude/skills/", "graphify-out/"],
+    "sync_dirs": [".claude/archives", "graphify-out"],
+    "stale_patterns": []
+  },
 
-  "notebooklm_allowed_extensions": [".md", ".txt", ".pdf"],
-  "notebooklm_ignore_dirs": ["cache", "__pycache__"],
-  "notebooklm_max_file_size_mb": 50,
-
-  "stale_drive_patterns": []
+  "hooks": {
+    "pre_commit_secret_scan": true,
+    "post_commit_end_phase": true,
+    "secret_name_patterns": ["\\.env$", "\\.env\\.", "\\.pem$", "\\.key$", "\\.p12$", "secret", "password", "sifre", "\\.db$", "\\.sqlite", "dump\\.sql"]
+  }
 }

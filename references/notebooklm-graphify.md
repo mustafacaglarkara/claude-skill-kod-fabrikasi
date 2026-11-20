@@ -1,136 +1,55 @@
-# NotebookLM ve Graphify'ı Etkili Kullanma
+# Graphify ve NotebookLM'i Etkili Kullanma
 
-## Mental model — kim ne yapar
+| Parça | Ne yapar | Yazar mı | Zorunlu mu |
+| --- | --- | --- | --- |
+| **Graphify** | **Yapı**: AST tabanlı harita; "X, Y'yi çağırıyor". Yerelde tree-sitter, LLM ve ağ yok. | `graphify-out/` | Önerilir (`integrations.graphify`) |
+| **NotebookLM** | **Anlam**: projeyi okumuş danışman; soru sorarsın, cevap verir. | ❌ Asla | İsteğe bağlı (`integrations.notebooklm`) |
+| **kf.py bundle** | git'in izlediği kod + belgeleri paketler, Drive'a (ya da `.claude/bundle-out/`) yazar, NotebookLM'i birebir aynalar | Drive / bundle-out | — |
+| **Ajanlar / ana oturum** | Asıl işi yapar | ✅ | — |
 
-| Parça | Ne yapar | Dosya yazar mı? |
-| --- | --- | --- |
-| **Graphify** | **Yapı**: "X, Y'yi çağırıyor" — AST tabanlı bağımlılık haritası | Sadece `graphify-out/`'a HTML/JSON üretir |
-| **NotebookLM** | **Anlam**: "X neden var, ne yapıyor" — projeyi okumuş danışman | ❌ Asla |
-| **bundle.py** | İkisinin çıktısını + kodu + dökümanları Drive'a yazıp NotebookLM'i senkronlar | ✅ Drive'a |
-| **Claude / Antigravity** | Asıl işi yapar: kod yazar, raporu yazar, ROADMAP günceller | ✅ |
+Kullanıcı işi **sana** söyler; NotebookLM iş yapmaz.
 
-**Önemli kural:** Kullanıcı sana iş söyler — NotebookLM'e değil. NotebookLM cevap verir, iş yapmaz.
-
----
-
-## NotebookLM ile etkili sorgu
-
-### Terminal
+## Graphify
 
 ```bash
-# Genel soru
-notebooklm ask "ROADMAP'e göre sıradaki faz hangi dosyalara dokunmamı gerektirir?"
+graphify update .                       # harita (saniyeler); post-commit end-phase bunu zaten çağırır
+graphify query "fiyat nasıl hesaplanıyor?"
+graphify explain "OrderService"
+graphify path "Checkout" "PaymentGateway"
+graphify export callflow-html           # çağrı zincirleri
+graphify install --project              # /graphify skill'i + PreToolUse hatırlatma (isteğe bağlı)
+```
 
-# Sadece belirli kaynağa hedefle (büyük tum_kodlar.txt tek başına dağıtabilir)
-notebooklm source list --notebook <NOTEBOOK_ID>   # id'leri öğren
-notebooklm ask "Auth akışı nasıl?" -s <source_id_kod> -s <source_id_roadmap>
+Çıktılar: `graph.html` (etkileşimli; "buraya dokunsam nereler kırılır"), `GRAPH_REPORT.md` (metin özeti; paketle NotebookLM'e gider), `graph.json`. `.graphifyignore` taramayı daraltır (veri, görsel, lock, eski migrasyon); `.graphifyrc` `viz_node_limit`, `query_budget`.
 
-# Önemli cevabı not olarak sakla
+**Ajanlar için kural:** "Verimli çalış" bloğu `graphify query/explain`'i repo geneli `Grep`'ten önce koyar. Harita yoksa (`graphify-out/` yok) doğrudan `Grep`.
+
+Ne zaman: refactor öncesi etki analizi, coupling sıcak noktaları, ölü kod, onboarding. Yorumlar `.claude/context/GRAPHIFY_NOTES.md`'ye (faz-arsivcisi).
+
+`graphify hook install` KULLANMA (post-commit çakışması, tuzaklar #13). `graphify claude uninstall` PreToolUse hatırlatmasını kaldırır.
+
+## NotebookLM (etkinse)
+
+```bash
+notebooklm source list --notebook <ID>                  # kaynaklar; başlıklar BENZERSİZ olmalı
+notebooklm ask "ROADMAP'e göre sıradaki faz hangi dosyalara dokunur?"
+notebooklm ask "Auth akışı nasıl?" -s <kaynak_id_kod> -s <kaynak_id_roadmap>   # hedefli
 notebooklm ask "Refactor önerin?" --save-as-note
-
-# Üret
-notebooklm generate audio "Faz durumu özeti"        # podcast brifingi
-notebooklm generate mind-map                         # kavram haritası
-notebooklm generate report --format briefing-doc    # onboarding dökümanı
+notebooklm generate audio "Faz durumu özeti" | mind-map | report --format briefing-doc
 ```
 
-### Web (notebooklm.google.com)
+Web: her senkron sonrası **"Yenile (Refresh)"**; yoksa eski koda göre cevap verir.
 
-- Sohbet kutusu — kaynaklara atıf vererek cevap verir `[1][2]`.
-- **"Yenile (Refresh)"** butonu — her commit sonrası bas, yoksa eski koda göre cevap alırsın.
-- "Audio Overview" butonu — proje brifingi podcast.
+Paket düzeni (`kf.py bundle`): `kod/tum_kodlar.txt` (izlenen kaynak dosyaların birleşimi, klasör listesiyle), `belgeler/<yol__ad>.md` (planlama belgeleri, README, CLAUDE.md, docs/*.md, GRAPH_REPORT.md), `claude__archives/` (faz raporları), `graphify-out/` yalnızca `.md`. NotebookLM'e yalnızca `.md/.txt/.pdf` ve 50 MB altı gider; başlık = düzleştirilmiş yol.
 
-### Tipik soru kalıpları
+Tipik sorular: "sıradaki faz ne" · "Faz 4F için adım adım plan ve dokunulacak dosyalar" · "/urunler akışı hangi controller'lardan geçer" · "QA_REPORTS'taki çözülmemiş sorunlar".
 
-| İhtiyaç | Örnek soru |
-| --- | --- |
-| Neredeyiz / ne sırada | `"sıradaki faz ne olacak"` |
-| Faz planı fikri | `"Faz 4F için adım adım çözüm planı ve dokunulacak dosyalar?"` |
-| Kod anlama | `"/urunler listeleme akışı hangi controller ve view'lardan geçiyor?"` |
-| Faz sonrası kontrol | `"faz4f raporuna göre hangi testler geçti?"` |
-| Bilinen sorunlar | `"QA_REPORTS'taki çözülmemiş sorunlar neler?"` |
+Sınır: NotebookLM son commit'ten geride olabilir; çelişkide yerel belgeler esas. Kodun ve iş kurallarının Google'a yüklenmesi kullanıcının/şirketin kararıdır: etkinleştirmeden önce sor.
 
----
+## İkisi birlikte
 
-## Graphify ile etki analizi
+1. `GRAPH_REPORT.md` / `graph.html`'de aşırı bağlı düğüm → 2. `kesifci` ya da NotebookLM'e "bu modül ne işe yarıyor, nasıl sadeleşir?" → 3. `mimar` TASARIM modu ile plan → 4. onay → `gelistirici`.
 
-```bash
-# Mimari haritayı güncelle (AST tabanlı, LLM yok)
-make graphify-update
-# veya: graphify update .
+## Kritik alışkanlık
 
-# Callflow diyagramları (çağrı zincirleri)
-graphify export callflow-html
-```
-
-### Çıktılar (`graphify-out/`)
-
-| Dosya | Ne için |
-| --- | --- |
-| `graph.html` | İnteraktif bağımlılık grafiği — tarayıcıda aç, modüllere zoom, düğümlere tıkla. **Refactor öncesi "buraya dokunsam nereler kırılır?" sorusunun görsel cevabı.** |
-| `GRAPH_REPORT.md` | Metin özeti: en bağlantılı/kırılgan modüller, metrikler. Bu rapor NotebookLM'e de gider. |
-| `callflow-html/` | Bir isteğin/akışın çağrı zincirini izlemek için |
-
-### `.graphifyignore`
-
-Taranmayacak yerleri kontrol eder. Tipik:
-```text
-node_modules/
-vendor/
-public/
-.dart_tool/
-build/
-storage/
-```
-
-### Ne zaman Graphify'a bak
-
-- Refactor öncesi etki analizi
-- Coupling sıcak noktalarını bulma
-- Ölü kod tespiti
-- Yeni gelen geliştiriciye onboarding
-
----
-
-## İkisini birlikte — asıl güç burada
-
-**Graphify** (yapı) + **NotebookLM** (anlam) = tam resim.
-
-### Tipik akış
-
-```text
-1. graph.html'de karmaşık/aşırı bağlı bir düğüm görürsün
-                    ↓
-2. NotebookLM'e sor: "GRAPH_REPORT'a göre en bağlı modül şu;
-                      bu modül ne işe yarıyor ve nasıl sadeleştirebilirim?"
-                    ↓
-3. NotebookLM yapısal + planlama bağlamını birleştirip cevap verir
-                    ↓
-4. Sen bunu Claude'a aktarır, refactor planı için kullanırsın
-```
-
-### Refactor planı kalıbı
-
-NotebookLM'e ROADMAP + GRAPH_REPORT kaynaklarıyla:
-> "Şu fazı yaparken hangi dosyalar etkilenir? Hangi bağımlılıklar kırılır?"
-
-→ Yapısal + planlama bağlamını birleştirir → güvenli plan.
-
----
-
-## Kritik alışkanlık: Dökümanları commit'ten ÖNCE güncelle
-
-NotebookLM'in en iyi cevap verdiği kaynaklar **kod değil, bağlam**:
-- `ROADMAP.md`, `MEMORY.md`, `QA_REPORTS.md`
-
-Sıralama:
-```text
-1. Kod yaz
-2. ROADMAP / MEMORY / QA güncelle    ← BUNU UNUTMA
-3. git commit
-4. post-commit otomatik: graphify + bundle → NotebookLM güncel
-5. NotebookLM web'de "Yenile"
-6. Sonraki fazı NotebookLM'e sor → iyi cevap alırsın
-```
-
-Adım 2'yi atlarsan NotebookLM sadece kodu görür, **bağlamı görmez** — cevaplar yüzeyselleşir.
+Belgeler **commit'ten önce** güncellenir (faz-arsivcisi): kod yaz → tester → reviewer → **faz-arsivcisi** → commit → post-commit (graphify + bundle + sync) → NotebookLM "Yenile". Belge güncellenmeden commit atılırsa NotebookLM yalnızca kodu görür, bağlamı görmez.

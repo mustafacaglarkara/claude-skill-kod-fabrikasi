@@ -1,236 +1,144 @@
-# Kod Fabrikası — Claude Code Skill (v2.0)
+# Kod Fabrikası — Claude Code Skill (v3.0)
 
-> **EN:** AI-powered software factory for Claude Code. NotebookLM + Graphify + Git hooks + Phase-based Development workflow, all driven by a single per-project config. Portable across all your projects. Documentation and skill content are in Turkish.
->
-> **v2.0:** Project management `.md` files now live under `.claude/{context,decisions,archives,references}/` — root stays clean. See [CHANGELOG.md](CHANGELOG.md) for migration from v1.
+> **EN:** AI-powered software factory for Claude Code: the main session orchestrates a team of subagents (scout, developer, tester, reviewer, archivist + optional architect, security reviewer, domain experts), keeps project memory across sessions (PROGRESS / ADR / open questions + a SessionStart hook), maps the code with graphify, enforces permission rules, and optionally mirrors docs and code to Google Drive, NotebookLM and Obsidian. One Python CLI (`kf.py`), one per-project config, Windows/macOS/Linux. Documentation is in Turkish.
 
-**TR:** AI destekli yazılım fabrikası. NotebookLM + Graphify + Git hook'ları + Faz Bazlı Geliştirme iş akışını her projende aynı disiplinle yürütür. Tek bir `.claude/kod-fabrikasi.config.json` üzerinden tüm proje-spesifik değerleri tutar — bir kere kur, her yerde çalıştır.
+**TR:** Ana Claude Code oturumu **orkestratördür**: işi böler, `.claude/agents/` altındaki uzman ajanlara brif verir, sonuçları birleştirir. Kodu yazan ajan kendi işini onaylamaz. Proje hafızası `.claude/` altındaki belgelerde durur ve her oturuma otomatik yüklenir. Kod haritası graphify; Drive / NotebookLM / Obsidian isteğe bağlı. Tek komut arayüzü `kf.py`; `make` ve bash gerekmez.
 
-**v2.0 değişikliği:** Proje yönetim `.md` dosyaları artık root'u kirletmiyor. ROADMAP/MEMORY/QA gibi dosyalar `.claude/{context,decisions,archives,references}/` altında gruplanıyor. Faz raporları `.claude/archives/PHASE_NN_<konu>.md` formatında. v1 → v2 migration için bkz. [CHANGELOG.md](CHANGELOG.md).
+**v3.0:** ajan ekibi + faz hafızası + `kf.py`. v2'den geçiş: `kf.py migrate` (bkz. [CHANGELOG.md](CHANGELOG.md)).
 
 ---
 
-## ⚡ Hızlı Başlangıç (komutları unutsan da olur)
-
-### 1. Skill'i bir kerelik kur
+## ⚡ Hızlı başlangıç
 
 ```bash
+# 1. Skill'i bir kez kur
 git clone https://github.com/mustafacaglarkara/claude-skill-kod-fabrikasi.git ~/.claude/skills/kod-fabrikasi
+
+# 2. Projede Claude Code'a yaz:
+#    "Bu projeye kod fabrikası kur."
+#    Claude projeyi keşfeder, tek toplu soru sorar (test komutları, canlıya yazan komutlar,
+#    riskli alanlar, ekip/entegrasyonlar) ve kf.py init ... ile kurar; hooks + selftest çalıştırır.
+
+# 3. Faz başlat:
+#    "Sıradaki fazı başlat."
 ```
 
-### 2. Yeni bir projeye girdiğinde
+Akış: bağlam → plan → **onay** → `gelistirici` (paralel ≤3) → `tester` → `reviewer` → `faz-arsivcisi` → commit (yalnızca siz isterseniz). Post-commit: graphify + bundle + sync.
+
+Elle kurulum örneği:
 
 ```bash
-cd <yeni-proje>
-bash ~/.claude/skills/kod-fabrikasi/scripts/init.sh   # 4 soru sorar, her şeyi kurar
-make setup-hooks                                       # git hook'ları (pre-commit + post-commit)
-make bundle                                            # ilk Drive + NotebookLM eşitlemesi
+python ~/.claude/skills/kod-fabrikasi/scripts/kf.py init --framework node \
+  --test-cmd "npm test" --live-cmd "npm run deploy" --risk auth \
+  --agents mimar,guvenlik-inceleyici --expert "odeme-uzmani:Ödeme API:src/payments/"
+python .claude/scripts/kf.py hooks && python .claude/scripts/kf.py selftest
 ```
-
-### 3. Faz başlat (Claude'a tek satır)
-
-```text
-"FAZ_PROMPT'u oku ve sıradaki fazı başlat."
-```
-
-Claude 6 adımlı disiplinle çalışır: bağlam topla → plan sun → **onay bekle** → uygula + test → faz raporu yaz (`.claude/archives/PHASE_NN_*.md`) → ROADMAP/MEMORY/QA güncelle → commit. Post-commit hook NotebookLM'i otomatik eşitler.
-
-### 4. v1 projelerinden v2'ye geçiş
-
-Eski projende `ROADMAP.md`, `MEMORY.md` vs. root'ta mı? [CHANGELOG.md](CHANGELOG.md) → "Migration Rehberi (v1 → v2)" bölümü tek tek komutları gösterir.
 
 ---
 
-## 📦 Ön Gereksinimler
+## 👥 Ekip
 
-```bash
-# Mimari haritalayıcı
-python3 -m pip install graphifyy
+| Ajan | Model | Yazar | Görev |
+| --- | --- | --- | --- |
+| `kesifci` | sonnet | ❌ | "X nerede, Y'yi kim çağırıyor" → dosya:satır |
+| `gelistirici` | opus | ✅ | Onaylı planın bağımsız parçası |
+| `tester` | sonnet | ❌ | Derleme / test / tip denetimi, kanıtlı rapor |
+| `reviewer` | opus | ❌ | Donmuş diff'in bağımsız incelemesi |
+| `faz-arsivcisi` | sonnet | yalnızca `.claude/*.md` | PROGRESS, ROADMAP, ADR, açık sorular, faz raporu |
+| `mimar` (isteğe bağlı) | opus xhigh | ✅ | Yüksek risk, tasarım, kök neden |
+| `guvenlik-inceleyici` (isteğe bağlı) | opus | ❌ | Auth / token / yükleme / PII |
+| `<alan>-uzmani` (isteğe bağlı) | sonnet | ❌ | Dış API / alan kuralları |
 
-# NotebookLM API + tarayıcı eklentisi
-python3 -m pip install "notebooklm-py[browser]"
-playwright install chromium
-
-# Google hesabıyla NotebookLM'e giriş (bir kerelik)
-notebooklm login
-```
-
-Doğrulama:
-```bash
-notebooklm list
-graphify --version
-```
-
-> ⚠️ `notebooklm-py` **hangi Python'a kuruluysa** `init.sh` o Python'un tam yolunu sorar (PATH varsaymak hook'larda patlar — bkz. [Tuzak #3](references/tuzaklar.md)).
+Her ajan dosyasında ortak **"Verimli çalış"** bloğu (harita önce, aralık okuma, orantılı test, stash yasağı, ~120 çağrı sınırı). Ayrıntı: [references/ajanlar.md](references/ajanlar.md).
 
 ---
 
-## 🏗️ Skill Yapısı
+## 🏗️ Yapı
 
 ```text
 ~/.claude/skills/kod-fabrikasi/
-├── SKILL.md                          # Frontmatter + 6 adımlık iş akışı özeti
-├── references/                       # Level-3: gerektiğinde yüklenir
-│   ├── workflow.md                   # Faz akışı detayı
-│   ├── kurulum-rehberi.md            # Yeni proje kurulumu
-│   ├── notebooklm-graphify.md        # Etkili kullanım
-│   ├── faz-raporu-sablonu.md         # Rapor şablonu + örnek
-│   └── tuzaklar.md                   # 10 kritik tuzak (geçmişten damıtılmış)
+├── SKILL.md                      # Claude'un okuduğu ana dosya
+├── references/                   # workflow · ajanlar · hafiza · kurulum-rehberi · faz-raporu-sablonu · notebooklm-graphify · tuzaklar
 ├── scripts/
-│   ├── init.sh                       # İnteraktif kurulum (4 soru)
-│   ├── bundle.py                     # Config-driven; Drive + NotebookLM ayna senkron
-│   ├── Makefile                      # bundle / graphify-update / end-phase / setup-hooks
-│   └── setup-hooks.sh                # Framework-aware (flutter/go/php/python/node/none)
+│   ├── kf.py                     # CLI: check init repair migrate hooks secret-scan graphify bundle sync end-phase selftest status
+│   └── faz_hafiza.py             # SessionStart hook
 └── assets/
-    └── kod-fabrikasi.config.example.json
+    ├── kod-fabrikasi.config.example.json
+    ├── settings.example.json     # deny/ask kuralları + hook (birleştirilir)
+    ├── agents/                   # 8 ajan şablonu ({{PROJECT_NAME}} vb. doldurulur)
+    └── templates/                # ROADMAP PROGRESS DECISIONS OPEN_QUESTIONS FAZ_PROMPT MEMORY QA_REPORTS KNOWN_BUGS
+                                  # NOTEBOOKLM_SUMMARY GRAPHIFY_NOTES PHASE_TEMPLATE CLAUDE_SECTION graphifyignore graphifyrc
 ```
 
-`init.sh` projeyi şu hale getirir:
+Projede oluşan yapı:
 
 ```text
-<proje-root>/
-├── .claude/kod-fabrikasi.config.json   # tüm proje-spesifik değerler burada
-├── bundle.py                            # config'ten okur
-├── Makefile                             # config'ten okur
-├── setup-hooks.sh                       # config'ten framework'ü okur, doğru hook'u üretir
-├── reports/                             # faz raporları buraya yazılır
-├── ROADMAP.md / MEMORY.md / QA_REPORTS.md  # senin tarafından oluşturulur
-└── .gitignore (graphify-out/, __pycache__/, tum_kodlar.txt eklenir)
+<proje>/
+├── CLAUDE.md                     # "Alt ajanlar ve proje hafızası" bölümü (işaretli, güncellenebilir)
+├── .claude/
+│   ├── kod-fabrikasi.config.json # version 3; test/canlı komutlar, riskli alanlar, ajanlar, entegrasyonlar
+│   ├── settings.json             # deny .env/pem/key · ask push/reset/canlı komutlar · SessionStart hook
+│   ├── agents/  hooks/faz_hafiza.py  scripts/kf.py
+│   ├── archives/   ROADMAP PROGRESS PHASE_TEMPLATE PHASE_NN_* NOTEBOOKLM_SUMMARY
+│   ├── decisions/  DECISIONS (ADR) OPEN_QUESTIONS FAZ_PROMPT
+│   ├── context/    MEMORY GRAPHIFY_NOTES
+│   ├── references/ QA_REPORTS KNOWN_BUGS
+│   └── bundle-out/               # Drive kapalıysa paket (gitignore)
+└── .graphifyignore .graphifyrc .gitattributes
 ```
 
 ---
 
-## 🧠 Sistem Nasıl Çalışır
+## 🔐 Güvenlik ilkeleri
 
-```text
-Sen → kod yaz + ROADMAP/MEMORY/QA güncelle → git commit
-                                                  │
-                                  pre-commit ─────┤
-                                                  ├─ testler (framework'e göre)
-                                                  │
-                                  post-commit ────┤
-                                                  ├─ graphify update . (AST mimari harita)
-                                                  └─ bundle.py
-                                                       ├─ kodu paketle → tum_kodlar.txt
-                                                       ├─ kritik dökümanlar → Drive
-                                                       ├─ reports/ + graphify-out/ → Drive ayna
-                                                       └─ NotebookLM'i Drive ile birebir eşitle
-                                                  │
-                                  NotebookLM web ─┘  ← "Yenile" butonu
-```
-
-| Parça | Ne yapar |
-| --- | --- |
-| **Claude / Antigravity** | Asıl işi yapar: kod yazar, faz raporu yazar, ROADMAP/MEMORY/QA günceller |
-| **NotebookLM** | Projeyi okumuş danışman — soru sorarsın, cevap verir. Dosya yazmaz, faz yapmaz |
-| **Graphify** | AST tabanlı mimari harita — refactor öncesi etki analizi |
-| **bundle.py** | Drive ve NotebookLM'i kod + dökümanlarla birebir aynalar |
-| **Git hooks** | Her commit'te otomatik tetikler |
+- Paket (`kf.py bundle`) **yalnızca `git ls-files`** dosyalarından oluşur; `.env`, veritabanı, döküm git dışında olduğu için hiç girmez.
+- Pre-commit hook staged dosyalarda gizli bilgi tarar (ad kalıpları + `.env` değerleri); eşleşmede commit durur.
+- `settings.json`: `.env`/pem/key okunamaz; `git push`, `reset --hard`, `stash`, canlıya yazan komutlar her seferinde sorar.
+- Ajanlar commit/push/deploy yapmaz; `tester` ve `reviewer` kod yazamaz; planlama belgelerini yalnızca `faz-arsivcisi` günceller.
+- NotebookLM aynalamada güvenlik freni: paket klasörü boşsa hiçbir kaynak silinmez.
 
 ---
 
-## ⚙️ Config Şeması
-
-`.claude/kod-fabrikasi.config.json` (init.sh tarafından üretilir):
-
-```json
-{
-  "drive_folder_path": "/Users/.../Drive'ım/DEV_PROJELERI/<proje>",
-  "notebook_id": "uuid-from-notebooklm",
-  "python_bin": "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3",
-  "graphify_bin": "/Library/Frameworks/Python.framework/Versions/3.13/bin/graphify",
-  "framework": "flutter",
-  "critical_docs": ["ROADMAP.md", "MEMORY.md", "QA_REPORTS.md", ...],
-  "sync_dirs": ["reports", "graphify-out"],
-  "phase_files": { "roadmap": "ROADMAP.md", ... }
-}
-```
-
-Tam şablon: [`assets/kod-fabrikasi.config.example.json`](assets/kod-fabrikasi.config.example.json)
-
-**Desteklenen framework'ler** (pre-commit test komutu seçimi):
-- `flutter` → `flutter analyze` + `flutter test`
-- `go` → `go test ./...`
-- `php-laravel` → `php artisan test`
-- `python` → `pytest`
-- `node` → `npm test`
-- `none` → test komutu yok
-
----
-
-## 🛠️ Günlük Komutlar
+## 🛠️ Komutlar
 
 ```bash
-make bundle              # Manuel: kod paketle + Drive + NotebookLM eşitle
-make graphify-update     # Manuel: mimari haritayı güncelle
-make end-phase           # Faz sonu: graphify + bundle birlikte
-make setup-hooks         # Hook'ları (yeniden) kur
-make check-config        # Config'i doğrula
+python .claude/scripts/kf.py check        # kurulum durumu
+python .claude/scripts/kf.py status       # faz hafızası (hook çıktısı)
+python .claude/scripts/kf.py selftest     # PASS/FAIL/WARN
+python .claude/scripts/kf.py bundle       # paket + Drive + NotebookLM (etkinse); --dry-run
+python .claude/scripts/kf.py graphify     # harita
+python .claude/scripts/kf.py end-phase    # graphify + bundle + sync (post-commit bunu çağırır)
+python ~/.claude/skills/kod-fabrikasi/scripts/kf.py migrate --dry-run   # v1/v2 → v3
 ```
 
-Veya sadece `git commit` at — post-commit hook her şeyi otomatik yapar.
+`KF_SKIP=1 git commit ...` post-commit otomasyonunu bir kez atlar.
 
 ---
 
-## 🚫 10 Kritik Tuzak (sistemi "iyileştireyim" derken düşme)
+## 📦 Ön gereksinimler
 
-`bundle.py` ve `setup-hooks.sh` bu hatalardan geçerek olgunlaştı. Detay: [`references/tuzaklar.md`](references/tuzaklar.md)
-
-1. NotebookLM kaynaklarını başlığa göre dict'leme (çiftler birikir)
-2. Alt klasör dosyalarında başlık çakışması (`a/rapor.md` ≠ `b/rapor.md` → `__` ile düzleştir)
-3. `python3` PATH varsayma (hook'lar farklı PATH ile çalışır)
-4. Boş klasörde NotebookLM'i temizleme (güvenlik freni şart)
-5. `__pycache__/` commit etme
-6. Büyük HTML/JSON yükleme (NotebookLM boğulur)
-7. `copytree(dirs_exist_ok=True)` (eski dosyalar birikir → `rmtree` + `copytree`)
-8. `reports/` klasörünü `sync_dirs`'e koymama
-9. Aynı içeriği hem `.md` hem `.txt` yazma (NotebookLM'de çift kaynak)
-10. Runtime doğrulamayı atlayıp "yeşil" yazma
+git · Python 3.10+ · (önerilir) graphify: `uv tool install "graphifyy[sql]" --python 3.13` · (NotebookLM etkinse) `pip install "notebooklm-py[browser]"`, `playwright install chromium`, `notebooklm login`; hangi Python'a kurulduysa config `python_bin` o olmalı.
 
 ---
 
-## 🆘 Sorun Giderme
+## 🆘 Sorun giderme
 
 | Sorun | Çözüm |
 | --- | --- |
-| `ModuleNotFoundError: notebooklm` | `python_bin` PATH'teki python3'e işaret ediyor ama paket başka python'a kurulu. `which python3` → config'i o yola sabitle. |
-| NotebookLM'de çift kaynak | `make bundle` tekrar çalıştır — id bazında temizler. |
-| `Drive klasöründe dosya yok` uyarısı | Güvenlik freni devreye girdi (iyi haber). Drive yolu doğru mu? Drive masaüstü çalışıyor mu? |
-| Hook çalışmıyor | `make setup-hooks` tekrar çalıştır. `.git/hooks/post-commit` var mı kontrol et. |
-| `init.sh: command not found` | Bash kullan: `bash ~/.claude/skills/kod-fabrikasi/scripts/init.sh` |
+| `Agent type 'x' not found` | Ajanlar birkaç saniyede yüklenir (hot reload); olmazsa yeni oturum. |
+| Hook bağlama hiçbir şey eklemiyor | PROGRESS başlıkları `## Durum` / `## Günlük` / `## Sıradaki adım` değil; hook'u uyarla. `kf.py status` ile dene. |
+| `ModuleNotFoundError: notebooklm` | `python_bin` yanlış Python'a işaret ediyor. `kf.py selftest`. |
+| post-commit iki kez graphify çalıştırıyor | `graphify hook install` kurulmuş; `kf.py hooks` tek sahip olmalı. |
+| `graphify: command not found` | `uv tool update-shell`, terminali yeniden aç; ya da config `graphify_bin` tam yol. |
+| `init` "config zaten var" (exit 2) | `repair` (eksikler), `migrate` (v1/v2), `init --force`. |
+| Drive klasörü yok uyarısı | Paket `.claude/bundle-out/` altına yazıldı; Drive masaüstü çalışıyor mu? |
 
 ---
 
-## 🔄 Güncelleme
+## 📚 Rehberler
 
-```bash
-cd ~/.claude/skills/kod-fabrikasi
-git pull
-```
+[SKILL.md](SKILL.md) · [references/workflow.md](references/workflow.md) · [references/ajanlar.md](references/ajanlar.md) · [references/hafiza.md](references/hafiza.md) · [references/kurulum-rehberi.md](references/kurulum-rehberi.md) · [references/faz-raporu-sablonu.md](references/faz-raporu-sablonu.md) · [references/notebooklm-graphify.md](references/notebooklm-graphify.md) · [references/tuzaklar.md](references/tuzaklar.md)
 
-Mevcut projelerin config'i değişmez; sadece skill içerikleri güncellenir.
+## 📄 Lisans ve katkı
 
----
-
-## 📚 Kapsamlı Rehberler
-
-- [`SKILL.md`](SKILL.md) — Claude'un okuduğu ana skill dosyası
-- [`references/workflow.md`](references/workflow.md) — 6 adımlı faz akışı
-- [`references/kurulum-rehberi.md`](references/kurulum-rehberi.md) — yeni proje kurulumu
-- [`references/notebooklm-graphify.md`](references/notebooklm-graphify.md) — etkili kullanım
-- [`references/faz-raporu-sablonu.md`](references/faz-raporu-sablonu.md) — rapor şablonu
-- [`references/tuzaklar.md`](references/tuzaklar.md) — 10 kritik tuzak
-
----
-
-## 📄 Lisans
-
-MIT — bkz. [LICENSE](LICENSE)
-
----
-
-## 🤝 Katkı
-
-Bu skill kişisel iş akışımdan damıtıldı. Bug bildirimi / iyileştirme önerisi için **Issue** veya **PR** açabilirsiniz. Skill'i forklayıp kendi disiplininize uyarlayabilirsiniz.
-
-**Yapı:** [Anthropic Agent Skills](https://docs.claude.com/en/docs/agents-and-tools/agent-skills/overview) spec'ine uygundur (frontmatter, progressive disclosure, references/scripts/assets klasörleri).
+MIT — [LICENSE](LICENSE). Katkı kuralları: [CONTRIBUTING.md](CONTRIBUTING.md). Yapı [Anthropic Agent Skills](https://docs.claude.com/en/docs/agents-and-tools/agent-skills/overview) spec'ine uygundur.

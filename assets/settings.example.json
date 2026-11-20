@@ -1,0 +1,36 @@
+{
+  "_comment": "kf.py init bu kurallari mevcut .claude/settings.json ile BIRLESTIRIR (ustune yazmaz). Oncelik: deny > ask > allow. `ask` listesindeki komut 'her zaman izin ver' secilse bile sorulur. Makineye ozel allow kurallari .claude/settings.local.json (git disi). Ana oturum model/effort ayari BILEREK yazilmaz: kullanicinin varsayilani degismez.",
+  "permissions": {
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(**/*.pem)",
+      "Read(**/*.key)",
+      "Bash(cat *.env*)"
+    ],
+    "ask": [
+      "Bash(git push *)",
+      "Bash(git push)",
+      "Bash(git reset --hard *)",
+      "Bash(git checkout -- *)",
+      "Bash(git stash *)",
+      "Bash(git clean *)",
+      "Bash(rm -rf *)",
+      "Bash(<canliya yazan komut> *)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"<python_bin>\" \"$CLAUDE_PROJECT_DIR/.claude/hooks/faz_hafiza.py\"",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}

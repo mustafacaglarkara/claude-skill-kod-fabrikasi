@@ -1,138 +1,92 @@
-# Faz Bazlı Geliştirme — 6 Adımlı Detaylı İş Akışı
+# Faz Bazlı Geliştirme — 9 Adımlı İş Akışı (v3)
 
-Bu dosya, Claude / Antigravity'nin **her yeni faza başlarken** uygulayacağı standart yönergedir. SKILL.md'deki 6 adımın ayrıntılı versiyonudur.
+Ana oturumun (orkestratör) **her fazda** uyguladığı yönerge. SKILL.md'deki özetin ayrıntısıdır. Ajan seçimi ve brif kuralları için [ajanlar.md](ajanlar.md); belge rolleri için [hafiza.md](hafiza.md).
 
----
+## Tetikleyiciler
 
-## Tetikleyici cümleler
-
-Kullanıcı şu cümlelerden birini söylediğinde 6 adımı sırayla uygula:
-
-- "FAZ_PROMPT'u oku ve sıradaki fazı başlat."
-- "Faz N'i başlat."
-- "Sıradaki faz nedir, başlayalım."
-- "Roadmap'teki ilk fazı yap."
+"Sıradaki fazı başlat", "Faz N'i başlat", "FAZ_PROMPT'u oku", "roadmap'teki ilk fazı yap", "nerede kalmıştık" (yalnızca durum; faz başlatmaz).
 
 ---
 
-## Adım 0 — Sıradaki fazı belirle
+## Adım 0 — Fazı belirle
 
-- Config'teki `phase_files.roadmap` dosyasını oku (varsayılan: `ROADMAP.md`).
-- "Faz Durumu Özeti" tablosuna veya checkbox listesine bak.
-- ✅ / `[x]` olmayan **ilk** faz hedef fazdır. Kullanıcı belirli bir faz istediyse onu al.
-- Birden fazla aday varsa kullanıcıya seçim sun.
+- `phase_files.roadmap` (`.claude/archives/ROADMAP.md`): "Faz Durumu Özeti" tablosunda ilk `[ ]` ya da 🟡 Aktif faz. Kullanıcı belirli bir faz söylediyse onu al.
+- `OPEN_QUESTIONS.md` içinde bu fazı bloke eden `OPEN-NNN` varsa önce onu kullanıcıya sor; cevapsız bloklu faza başlama.
+- Birden fazla aday varsa seçim sun (öneri önce).
 
-## Adım 1 — Bağlam topla
+## Adım 1 — Bağlam topla (ucuz)
 
-Hem yereldeki gerçek kaynakları oku **hem de** gerekirse NotebookLM'e danış:
+Yereldeki belgeler esastır: `PROGRESS.md` (Sıradaki adım), `DECISIONS.md` (ilgili ADR'ler, `Grep`), `MEMORY.md` (acı dersler), `QA_REPORTS.md`, `KNOWN_BUGS.md`. Hook zaten özetini yükledi; dosyaları bütün okuma, ilgili bölümü `Grep` ile bul.
 
-**Yerel dosyalar (asıl doğru kaynak):**
-- `phase_files.roadmap` — fazın tanımı
-- `phase_files.memory` — geçmiş teknik kararlar
-- `phase_files.qa` — bilinen sorunlar
-- `phase_files.known_bugs` — açık buglar (varsa)
+Kod konumları için **`kesifci`** (salt okunur, dosya:satır döner) ya da doğrudan `graphify query "<soru>"` / `graphify explain "<sembol>"`. Etki analizi gerekiyorsa `graphify-out/GRAPH_REPORT.md`. NotebookLM etkinse geniş/kesişen sorular için `notebooklm ask`. Çelişkide yerel dosyalar kazanır.
 
-**NotebookLM (geniş/kesişen sorular için):**
-```bash
-notebooklm ask "Faz N kapsamında hangi modüller ve dosyalar etkilenir?"
-notebooklm ask "QA_REPORTS ve MEMORY'ye göre Faz N'de dikkat edilecek bilinen sorunlar neler?"
-```
+Alan sorusu (dış API, ödeme, vb.) varsa `<alan>-uzmani`.
 
-**Etki analizi (refactor riski varsa):**
-- `graphify-out/GRAPH_REPORT.md` — en bağımlı/kırılgan modüller
-- `graphify-out/graph.html` — interaktif bağımlılık grafiği (kullanıcının açması gerekir)
+## Adım 2 — Plan sun ve ONAY al ⚠️ zorunlu durak
 
-> ⚠️ **Çelişki olursa yereldeki dosyalar esastır.** NotebookLM son commit'ten bir adım geride olabilir.
+Paket:
+1. Sıralı, somut adımlar; her adımda **hangi ajan** (ya da "ana oturum kendisi").
+2. Etkilenecek dosyalar `dosya:satır` ile; paralel parçaların dosya kümeleri **çakışmaz**.
+3. Riskler ve geri alma planı; yıkıcı işlem varsa yedek adımı; yüksek riskli alana dokunuyorsa `reviewer` + `guvenlik-inceleyici` (+ gerekirse `mimar` TASARIM modu önce).
+4. Kabul kriterleri (test edilebilir) ve koşulacak test komutları.
+5. Kullanıcıdan istenen kararlar: tek toplu soru, öneri önce (`AskUserQuestion`).
 
-## Adım 2 — Plan sun ve ONAY al ⚠️ Zorunlu durak
-
-Kullanıcıya net bir paket sun:
-
-1. **Yapılacaklar listesi** (sıralı, somut)
-2. **Etkilenecek dosyalar** (path listesi)
-3. **Riskler ve geri-alma (rollback) planı**
-4. **Tahmini iş süresi**
-
-> ⚠️ **ROADMAP kuralı:** Plan ≠ uygulama yetkisi. Kullanıcıdan **açık onay** al ("onaylıyorum", "devam et", "evet"). Onay olmadan koda dokunma. Belirsiz cevapta tekrar sor.
+Açık onay bekle ("onaylıyorum", "devam", "evet"). Belirsiz cevapta tekrar sor. Onay = yalnızca sunulan plan için; kapsam genişlerse yeniden sor.
 
 ## Adım 3 — Uygula
 
-- Yalnızca onaylanan adımları uygula.
-- **Yıkıcı işlemden** (DB schema, migration, toplu silme, force-push) önce **doğrulanmış yedek** al.
-- Bittiğinde testleri çalıştır — config'teki `framework`'e göre:
-  - `flutter` → `flutter test`
-  - `go` → `go test ./...`
-  - `php-laravel` → `php artisan test`
-  - `python` → `pytest`
-  - `node` → `npm test`
-- Test başarısızsa **düzelt veya raporda dürüstçe belirt**. Yeşil olmadan fazı kapatma.
+- Her parça için **yeni** `gelistirici`; aynı anda en fazla `agents.max_parallel_editors` (varsayılan 3) yazan ajan; salt okunur ajanlar yanında serbest.
+- Brif: [ajanlar.md](ajanlar.md) şablonu, eksiksiz. Paralel ajanlara birbirinin dosyalarını bildir.
+- Tam tanımlı küçük düzeltmeyi (bir alan, bir metin, bir rename) ana oturum kendisi yapabilir; testi kanıtlayarak.
+- Yıkıcı işlem (şema, migration, toplu silme) ajanda değil: ajan SQL/komutu verir, ana oturum kullanıcıya gösterir, onayla uygular.
+- Ajan raporunu oku; "brif dışı sorun" notlarını topla (sonraki fazlara ya da OPEN'a).
 
-## Adım 4 — Faz raporu yaz (v2.0)
+## Adım 4 — Test (`tester`, zorunlu)
 
-- `.claude/archives/PHASE_NN_<konu>.md` dosyası oluştur (NN = iki haneli; örn. `PHASE_01_veritabani_temizligi.md` veya `PHASE_14_6_web_drift_setup.md`).
-- Şablonu birebir uygula: önce projedeki `.claude/archives/PHASE_TEMPLATE.md`'yi tercih et (proje-spesifik kurallar olabilir); yoksa skill içindeki [faz-raporu-sablonu.md](faz-raporu-sablonu.md) kullan.
-- `.claude/archives/` klasörü `bundle.py` tarafından otomatik NotebookLM'e yüklenir (config `sync_dirs`'inde).
+- Brif: hangi komutlar (config `test_commands`), dar kapsam varsa hangi test dosyaları, PROGRESS'teki son "N test yeşil" değeri.
+- ❌ KIRMIZI → başarısızlıkları `dosya:satır` ile **yeni** bir `gelistirici`'ye düzeltme brifi; sonra yalnızca kırmızı dosyalar için tekrar `tester`. Aynı gelistirici'ye ikinci kez verme; ikinci başarısızlıkta `mimar`.
+- ⏸️ DOĞRULANAMADI (ortam yok) → raporda ve PROGRESS'te açıkça; "yeşil" yazılmaz.
 
-> **v1 → v2 değişiklik:** Eski `reports/fazNN_*.md` konumu artık kullanılmıyor. Eğer eski raporlar `reports/` altındaysa `.claude/archives/`'a taşı (rename: `fazXX` → `PHASE_XX`).
+## Adım 5 — İnceleme (`reviewer`, zorunlu)
 
-## Adım 5 — Dökümanları güncelle
+- Donmuş diff ver: `git diff HEAD -- <dosyalar>` çıktısı ya da kesin dosya listesi. Ana oturumun yorumunu değil, kodu ver.
+- Yüksek riskli alan (`high_risk_areas`) ya da auth/token/yükleme/PII → paralel `guvenlik-inceleyici`.
+- Bulguları koda bakarak teyit et (bir inceleme notu yanlış olabilir); teyitlileri düzeltme turuna gönder (yeni `gelistirici`, `dosya:satır`); sonra ilgili testler tekrar.
+- Karar ONAY değilse faz "Kısmen bitti".
 
-v2.0 path'leri (config-driven; varsayılan yollar):
+## Adım 6 — Arşiv (`faz-arsivcisi`)
 
-- **`.claude/archives/ROADMAP.md`** — fazın durumunu `[x]` yap; "Faz Durumu Özeti" tablosunu ve tarihini güncelle; çıkış kriterlerini işaretle; sıradaki fazı 🟡 Aktif yap.
-- **`.claude/context/MEMORY.md`** — bu fazda öğrenilen kalıcı kalıpları, kararları, tuzakları ekle.
-- **`.claude/references/QA_REPORTS.md`** — çözülen sorunları kapat, yeni keşfedilenleri ekle.
-- **`.claude/archives/NOTEBOOKLM_SUMMARY.md`** (varsa) — güncel proje durumunun kısa özetini yenile.
-- Gerekiyorsa `docs/` altındaki ilgili kullanım rehberlerini güncelle.
+Brif: faz no/başlık, yapılanlar, değişen dosyalar (tek cümle/dosya), tester sonucu (sayılarla), reviewer kararı, alınan tasarım kararları (ADR adayı), kapanan/yeni OPEN ve QA/BUG numaraları, öğrenilen acı dersler (MEMORY adayı), sonraki faza notlar. Ajan şunları yazar: `PHASE_NN_<konu>.md` (şablon birebir), PROGRESS (Durum, Günlük, Sıradaki adım), ROADMAP durum işareti, DECISIONS, OPEN_QUESTIONS, MEMORY, QA_REPORTS/KNOWN_BUGS, (varsa) NOTEBOOKLM_SUMMARY. Raporunu kontrol et: "Bitti" kanıtsız yazılmış mı?
 
-> **v1 → v2 not:** Eski projelerde bu dosyalar root'taydı (`ROADMAP.md`, `MEMORY.md`, …). Config'teki `phase_files` mapping'i ne diyorsa onu kullan; auto-discover olmadığı için config doğru olmalı.
+## Adım 7 — Kullanıcıya rapor
 
-> 🎯 **Kritik alışkanlık:** Dökümanları **commit'ten önce** güncelle. NotebookLM'in en iyi cevap verdiği kaynaklar bunlar — kod değil, bağlam.
+Kullanıcının dilinde, kısa: ne yapıldı (ajanları rolüyle an), ne geçti/geçmedi (çıktı alıntısıyla), ne test edilmedi, gereken kararlar (öneri önce), sıradaki adım, "commit atılmadı" ya da "commit için hazır". Ajan raporunu doğrulamadan aktarma.
 
-## Adım 6 — Commit & otomatik senkronizasyon
+## Adım 8 — Commit (yalnızca kullanıcı isterse)
 
-```bash
-git add -A
-git commit -m "Faz N: <faz başlığı>"
-```
-
-Commit mesajı formatı:
-- Türkçe başlık: `"Faz 12.3: Drift schema migration"`
-- Veya conventional: `"feat: Faz 12.3 — Drift schema migration"`
-- Hangisi seçilirse proje boyunca tutarlı kalsın.
-
-**post-commit hook otomatik çalışır:**
-1. Graphify haritası güncellenir
-2. `bundle.py` çalışır → kod paketlenir → Drive'a yazılır → NotebookLM Drive ile birebir eşitlenir
-
-Kullanıcıya hatırlat: **NotebookLM web arayüzünde "Yenile (Refresh)" butonuna basın** — yoksa sohbet eski koda göre cevap verir.
+- Adlı yollarla `git add <dosyalar>` (`-A` değil; `.env`, veri, döküm asla). Pre-commit gizli bilgi taraması çalışır.
+- Mesaj projede tutarlı: `Faz N: <başlık>` ya da `feat: Faz N — <başlık>`.
+- Post-commit: `kf.py end-phase` → graphify update → bundle (Drive/NotebookLM etkinse) → sync (Obsidian etkinse). Atlamak için `KF_SKIP=1 git commit ...`.
+- Kullanıcıya hatırlat: NotebookLM etkinse web arayüzünde "Yenile". Push yalnızca kullanıcı isterse (settings `ask`).
 
 ---
 
-## Kurallar (her fazda geçerli)
+## Kurallar (her fazda)
 
-1. **Önce onay, sonra kod.** Adım 2 atlanamaz.
-2. **Her faz bitip doğrulanmadan sıradakine geçilmez.**
-3. **Yıkıcı işlem = önce doğrulanmış yedek.**
-4. **Doğru kaynak yereldeki dosyalardır;** NotebookLM yardımcı/danışma katmanıdır.
-5. **Her faz; faz raporu + döküman güncellemesi + commit ile kapanır.** Üçü de yapılmadan faz "bitmiş" sayılmaz.
-6. **Commit mesajı tutarlı format** kullanır ve faz numarasını içerir.
-7. **Runtime doğrulamayı atlama** — çalıştıramadığın şeyi "yeşil" gösterme.
-
----
+1. Önce onay, sonra kod. 2. Kodu yazan ajan kendi işini onaylamaz. 3. Her faz: tester yeşil + reviewer ONAY + faz-arsivcisi kaydı olmadan "bitti" değil. 4. Yıkıcı işlem = önce doğrulanmış yedek, kullanıcı onayı. 5. Doğru kaynak yerel belgeler; NotebookLM danışma katmanı. 6. Yeni iş → yeni ajan; başarısızlıkta kademe yükselt. 7. Çalıştıramadığını "yeşil" gösterme.
 
 ## Mikrofazlama (Faz X.Y)
 
-Büyük bir faz birden fazla pakete bölünebilir:
-- Faz 12 → Faz 12.1, 12.2, 12.3...
-- Her mini-paket bittiğinde **ayrı commit** at (kullanıcı tercih ediyorsa, [[feedback_commit_per_phase]] anısına bakar).
-- Her mini-paket için **ayrı faz raporu zorunlu değil** — paket büyükse yaz, küçükse ana faz raporuna ekle.
-
----
+Büyük faz 12 → 12.1, 12.2… Her alt faz ayrı onay, ayrı tester/reviewer turu; ayrı commit kullanıcı tercih ederse. Faz raporu alt faz büyükse ayrı (`PHASE_12_2_...`), küçükse ana rapora bölüm.
 
 ## Hata senaryoları
 
-- **Test geçmiyor ama kullanıcı "devam et" diyor:** Faz raporuna "Testler kırmızı: <neden>, fix sonraki fazda" notu ekle ve commit at. Yeşil göstererek geçme.
-- **NotebookLM yanıt vermiyor:** Sorun değil — yereldeki dosyalar esas. Faz tamamlanır, NotebookLM bir sonraki başarılı senkronla yakalar.
-- **post-commit hook çakıyor:** `python_bin` yanlış kuruludur (Tuzak #3). Config'i kontrol et, [tuzaklar.md](tuzaklar.md)'a bak.
-- **Kullanıcı onay vermeden devam etmemi istiyor:** "Onaysız ilerleyemem, plan üzerinde ne değiştirelim?" diye sor. Bu kural durağan değil.
+| Durum | Yap |
+| --- | --- |
+| Test kırmızı, kullanıcı "devam et" diyor | PROGRESS ve faz raporuna "Testler kırmızı: <neden>, fix Faz N+1" yaz; "Kısmen bitti". Yeşil gösterme. |
+| Ajan "Agent type not found" | Hot reload birkaç saniye sürer; tekrar dene. Olmazsa kullanıcıya yeni oturum öner; acilse `general-purpose` ajanına "`.claude/agents/<ad>.md` dosyasını oku ve o role uy" brifi ver. |
+| Ajan 120+ araç çağrısında yarım bıraktı | Raporundaki "kalan" listesini yeni bir ajana ver; aynı ajanı devam ettirme. |
+| İki ajan aynı dosyayı değiştirdi | Planlama hatası: diff'i reviewer'a ver, çakışan parçayı tek gelistirici'ye yeniden yaptır; ajanlar.md "paylaşılan dosya" kuralını brife ekle. |
+| post-commit hook çöktü | `python_bin` yanlış ya da notebooklm-py o Python'da yok (tuzaklar #3). `kf.py selftest`. Hook hiçbir zaman commit'i bozmaz. |
+| Kullanıcı onaysız devam etmemi istiyor | "Onaysız ilerleyemem; plan üzerinde ne değiştirelim?" Bu kural esnemez. |
+| NotebookLM/Drive erişilemez | Sorun değil; yerel `.claude/bundle-out/` kullanılır, faz tamamlanır. |
