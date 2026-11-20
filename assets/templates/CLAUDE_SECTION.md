@@ -23,3 +23,4 @@ Kurallar:
 - Commit, push ve canlıya yazan komutlar yalnızca kullanıcı isterse. `.env` okunmaz; sır gerekirse kullanıcıya ne ekleyeceği söylenir.
 - `SessionStart` hook'u (`.claude/hooks/faz_hafiza.py`) PROGRESS durumunu, sıradaki adımı, açık soruları ve son commit'leri her oturuma yükler.
 - Komutlar: `python .claude/scripts/kf.py <check|status|bundle|graphify|end-phase|selftest>`. `graphify query "<soru>"` kod haritası için `Grep`'ten önce gelir.
+{{PROFILE_SECTION}}

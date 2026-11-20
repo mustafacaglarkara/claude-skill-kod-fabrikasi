@@ -51,6 +51,7 @@ Açık onay bekle ("onaylıyorum", "devam", "evet"). Belirsiz cevapta tekrar sor
 
 - Donmuş diff ver: `git diff HEAD -- <dosyalar>` çıktısı ya da kesin dosya listesi. Ana oturumun yorumunu değil, kodu ver.
 - Yüksek riskli alan (`high_risk_areas`) ya da auth/token/yükleme/PII → paralel `guvenlik-inceleyici`.
+- Güçlendirmeler: `FAZ_PROMPT.md`'deki "Güçlendirmeler (ana oturum)" bloğu varsa (`kf.py plugins --apply`), `pr-review-toolkit:review-pr` / `claude-security` burada paralel çalışır; yerleşik `/code-review` ve `/security-review` her kurulumda kullanılabilir. Hepsi `reviewer`'a ek, yerine değil; bulgular aynı teyit kuralından geçer.
 - Bulguları koda bakarak teyit et (bir inceleme notu yanlış olabilir); teyitlileri düzeltme turuna gönder (yeni `gelistirici`, `dosya:satır`); sonra ilgili testler tekrar.
 - Karar ONAY değilse faz "Kısmen bitti".
 

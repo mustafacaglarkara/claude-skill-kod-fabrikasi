@@ -17,6 +17,8 @@ Kaynak: iki gerçek projede haftalarca çalışan ekiplerden damıtıldı (bir A
 
 Projede gerekmeyen isteğe bağlı ajanı kurma (UI'sız projede UI uzmanı yok). `maxTurns` yalnızca salt okunur ajanlarda: sınırlı bir yazan ajan yarım iş bırakır.
 
+**Ajans profili katmanı** (`profile: ajans`; şablonlar `assets/agents/ajans/`): `metin-yazari` (sonnet/medium, yazar: yalnızca `clients/<slug>/campaigns|content`), `marka-denetcisi` (sonnet/high, maxTurns 40, QA kapısı), `seo-teknisyeni`, `rakip-analisti`, `site-denetcisi` (sonnet/medium, maxTurns 60, Bash ile betik çalıştırır, dosya yazmaz; betikler `--out` ile yazar), `cloudflare-operatoru` (sonnet/medium, maxTurns 40; API yazma yalnızca `--yes` + kullanıcı onayı), isteğe bağlı `reklam-stratejisti` (sonnet/medium, maxTurns 40). Brife iki satır eklenir: `MÜŞTERİ: <slug>` ve `DOKUNMA: clients/<diğer>/**`. Akışlar ve kapı kuralları: [ajans.md](ajans.md).
+
 Ajan dosyası = frontmatter (`name` = dosya adı, `description` katman + model + ne zaman + ne zaman yükselt, `tools`, `model`, `effort`, salt okunurlarda `maxTurns`, `color`) + rol, kaynak sırası, proje kuralları (config'ten doldurulur), yapma listesi, rapor şekli ve kelime sınırı + **Verimli çalış** bloğu. Şablonlar: `assets/agents/`. Ajan konuşmayı görmez; brif tek kaynağıdır.
 
 ## Brif şablonu (eksiksiz ver, kimse aramasın)

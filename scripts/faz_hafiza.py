@@ -32,15 +32,42 @@ DEFAULT_FILES = {
 }
 
 
-def load_phase_files():
+def load_cfg():
     try:
         with open(CONFIG_PATH, encoding="utf-8") as f:
-            cfg = json.load(f)
-        files = dict(DEFAULT_FILES)
-        files.update(cfg.get("phase_files", {}))
-        return files
+            return json.load(f)
     except Exception:
-        return DEFAULT_FILES
+        return {}
+
+
+def load_phase_files():
+    files = dict(DEFAULT_FILES)
+    files.update(load_cfg().get("phase_files", {}))
+    return files
+
+
+def ajans_ozeti(cfg):
+    """Ajans profilinde musteri listesi ve her musterinin son denetim/kampanya dosyasi (kisa)."""
+    if (cfg.get("profile") or "yazilim") != "ajans":
+        return ""
+    a = cfg.get("agency") or {}
+    cdir = a.get("clients_dir", "clients")
+    satirlar = []
+    for c in a.get("clients", [])[:12]:
+        p = os.path.join(ROOT, cdir, c.get("slug", ""))
+        son = []
+        for alt in ("audits", "campaigns", "seo/reports"):
+            d = os.path.join(p, alt)
+            try:
+                adlar = sorted(x for x in os.listdir(d) if not x.startswith("."))
+            except OSError:
+                adlar = []
+            if adlar:
+                son.append(f"{alt}: {adlar[-1]}")
+        satirlar.append(f"- `{c.get('slug')}` ({c.get('domain', '-')}) " + (" · ".join(son) if son else "(henuz calisma yok)"))
+    if not satirlar:
+        return "## Ajans\nMusteri yok: `kf.py client add --slug x --name \"X\" --domain x.com`"
+    return "## Ajans musterileri\n" + "\n".join(satirlar) + "\nKural: her brif TEK musteri soyler; metin teslimi marka-denetcisi ONAY'i, site teslimi site-denetcisi raporu ister."
 
 
 def oku(rel):
@@ -102,6 +129,10 @@ def main():
     adr = re.findall(r"^## (ADR-\d+: .+)$", oku(files.get("decisions")), re.M)
     if adr:
         out.append(f"Son karar: {adr[-1]} (toplam {len(adr)} ADR)")
+
+    aj = ajans_ozeti(load_cfg())
+    if aj:
+        out.append(aj)
 
     log = git("log", "--oneline", "-5")
     if log:

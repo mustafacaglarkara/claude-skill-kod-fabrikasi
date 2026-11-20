@@ -53,6 +53,27 @@ OPTIONAL_AGENTS = ["mimar", "guvenlik-inceleyici"]
 READ_ONLY_AGENTS = {"kesifci", "tester", "reviewer", "guvenlik-inceleyici"}
 EDIT_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
 
+# Profil: "yazilim" (varsayilan) | "ajans" (dijital ajans katmani; cekirdek ekip korunur, asagidakiler eklenir)
+PROFILES = ("yazilim", "ajans")
+AGENCY_AGENTS = ["metin-yazari", "marka-denetcisi", "seo-teknisyeni", "rakip-analisti", "site-denetcisi", "cloudflare-operatoru"]
+AGENCY_OPTIONAL_AGENTS = ["reklam-stratejisti"]
+AGENCY_READ_ONLY = {"marka-denetcisi", "seo-teknisyeni", "rakip-analisti", "site-denetcisi", "cloudflare-operatoru", "reklam-stratejisti"}
+AGENCY_SCRIPTS = ["_ortak.py", "cloudflare_ops.py", "site_audit.py", "pagespeed_check.py", "gsc_query.py", "ga4_query.py", "youtube_fetch.py"]
+AGENCY_SHARED_FILES = {"copywriting-frameworks.md": "copywriting-frameworks.md", "ad-policies.md": "ad-policies.md"}
+AGENCY_CLIENT_FILES = {"README.md": "README.md", "brand-guide.md": "brand-guide.md", "personas.md": "personas.md"}
+AGENCY_CLIENT_DIRS = ["campaigns", "content", "seo/reports", "audits", "research", "youtube-research", "infra"]
+# Kimlikler ve geri alinamaz Cloudflare islemleri. Yazma komutlari `ask`: --yes olsa bile her seferinde sorulur.
+AGENCY_DENY = [
+    "Read({{CRED}}/**)", "Read(**/service-account*.json)", "Bash(cat {{CRED}}/*)", "Bash(type {{CRED}}/*)",
+    "Bash(*cloudflare_ops.py dns delete*)", "Bash(*cloudflare_ops.py* dns delete*)",
+]
+AGENCY_ASK = [
+    "Bash(*cloudflare_ops.py purge*)", "Bash(*cloudflare_ops.py redirect add*)", "Bash(*cloudflare_ops.py redirect remove*)",
+    "Bash(*cloudflare_ops.py dns add*)", "Bash(*cloudflare_ops.py dns update*)", "Bash(*cloudflare_ops.py setting set*)",
+    "Bash(*cloudflare_ops.py dev-mode*)", "Bash(*cloudflare_ops.py under-attack*)", "Bash(*cloudflare_ops.py firewall add*)",
+    "Bash(*cloudflare_ops.py firewall remove*)", "Bash(wrangler deploy*)", "Bash(wrangler pages deploy*)",
+]
+
 DEFAULT_PHASE_FILES = {
     "roadmap": ".claude/archives/ROADMAP.md",
     "progress": ".claude/archives/PROGRESS.md",
@@ -128,10 +149,23 @@ def project_root():
 
 
 def skill_dir():
-    """assets/ klasorunu tasiyan skill kopyasini bul (init/migrate/repair icin)."""
-    for cand in (HERE.parent, Path.home() / ".claude" / "skills" / "kod-fabrikasi"):
+    """assets/ klasorunu tasiyan skill kopyasini bul (init/migrate/repair/client add icin).
+    Sira: bu dosyanin ust klasoru (skill kopyasi) > KF_SKILL_DIR > config.skill_dir (init kaydeder) > ~/.claude/skills/kod-fabrikasi."""
+    cands = [HERE.parent]
+    if os.environ.get("KF_SKILL_DIR"):
+        cands.append(Path(os.environ["KF_SKILL_DIR"]))
+    try:
+        cfgp = config_path(project_root())
+        if cfgp.exists():
+            sd = json.loads(cfgp.read_text(encoding="utf-8")).get("skill_dir")
+            if sd:
+                cands.append(Path(sd))
+    except Exception:
+        pass
+    cands.append(Path.home() / ".claude" / "skills" / "kod-fabrikasi")
+    for cand in cands:
         if (cand / "assets" / "agents").is_dir() and (cand / "assets" / "templates").is_dir():
-            return cand
+            return cand.resolve()
     return None
 
 
@@ -185,6 +219,43 @@ def today():
     return _dt.date.today().isoformat()
 
 
+def profile_of(cfg):
+    return (cfg or {}).get("profile") or "yazilim"
+
+
+def is_agency(cfg):
+    return profile_of(cfg) == "ajans"
+
+
+def agency(cfg):
+    return (cfg or {}).get("agency") or {}
+
+
+def default_agency(optional=None, clients=None):
+    return {
+        "_note": "Dijital ajans profili. clients[]: slug (klasor adi), name, domain, cloudflare_zone, gsc_site (sc-domain:x.com), ga4_property (sayisal), pagespeed_urls[].",
+        "clients_dir": "clients",
+        "shared_dir": "shared",
+        "credentials_dir": ".credentials",
+        "agents": list(AGENCY_AGENTS),
+        "optional_agents": [a for a in (optional or []) if a in AGENCY_OPTIONAL_AGENTS],
+        "clients": list(clients or []),
+    }
+
+
+def parse_client_spec(spec):
+    """'slug:Ad:domain[:zone[:gsc_site[:ga4_property]]]' -> dict"""
+    parts = [p.strip() for p in spec.split(":")]
+    if len(parts) < 3 or not parts[0] or not parts[2]:
+        die(f"--client bicimi: slug:Ad:domain[:zone[:gsc_site[:ga4]]] (verilen: {spec})")
+    slug = re.sub(r"[^a-z0-9-]", "-", parts[0].lower())
+    return {"slug": slug, "name": parts[1] or slug, "domain": parts[2],
+            "cloudflare_zone": parts[3] if len(parts) > 3 and parts[3] else parts[2],
+            "gsc_site": parts[4] if len(parts) > 4 and parts[4] else f"sc-domain:{parts[2]}",
+            "ga4_property": parts[5] if len(parts) > 5 else "",
+            "pagespeed_urls": [f"https://{parts[2]}/"]}
+
+
 def flat(rel):
     """Goreli yolu tek dosya adina duzlestir; bastaki nokta kalkar (gizli dosya sanilmasin)."""
     return rel.replace("\\", "/").replace("/", "__").lstrip(".")
@@ -201,7 +272,7 @@ def ensure_lines(path: Path, lines, label):
     existing = set(path.read_text(encoding="utf-8", errors="replace").splitlines())
     added = [l for l in lines if l not in existing]
     if added:
-        with path.open("a", encoding="utf-8") as f:
+        with path.open("a", encoding="utf-8", newline="\n") as f:
             if existing and not path.read_text(encoding="utf-8", errors="replace").endswith("\n"):
                 f.write("\n")
             f.write("\n".join(added) + "\n")
@@ -242,6 +313,8 @@ def cmd_check(args):
     kind, cfg = detect_structure(root)
     print(f"PROJE      : {root}")
     print(f"YAPI       : {kind}")
+    if cfg:
+        print(f"PROFIL     : {profile_of(cfg)}" + (f" ({len(agency(cfg).get('clients', []))} musteri)" if is_agency(cfg) else ""))
     print(f"GIT        : {'var' if (root / '.git').exists() else 'YOK'}")
     agents = sorted(p.stem for p in (root / ".claude" / "agents").glob("*.md"))
     print(f"AJANLAR    : {', '.join(agents) if agents else 'yok'}")
@@ -256,6 +329,17 @@ def cmd_check(args):
         for name in ("drive", "notebooklm", "obsidian"):
             print(f"{name.upper():<11}: {'etkin' if integ(cfg, name) else 'kapali'}")
     print(f"SKILL DIR  : {skill_dir() or 'bulunamadi (init/migrate icin gerekli)'}")
+    if cfg:
+        try:
+            inst = installed_plugins()
+            rel = [e for e in PLUGIN_CATALOG if plugin_relevant(e, cfg)]
+            applied = set((cfg.get("plugins") or {}).get("applied") or [])
+            kurulu = [e["id"] for e in rel if e["id"] in inst]
+            bekleyen = [i for i in kurulu if i not in applied]
+            eksik = [e["id"] for e in rel if e["id"] not in inst]
+            print(f"PLUGIN     : uygulanmis {len(applied)} · kurulu-bekleyen {len(bekleyen)}{' (' + ', '.join(bekleyen) + ' -> kf.py plugins --apply)' if bekleyen else ''} · onerilen-eksik {len(eksik)} (kf.py plugins)")
+        except Exception as e:
+            print(f"PLUGIN     : tespit edilemedi ({e})")
 
 
 # ---------------------------------------------------------------- init / repair
@@ -269,11 +353,13 @@ def build_config(args, root):
         url = parts[3].strip() if len(parts) > 3 else ""
         experts.append({"name": name, "domain": domain, "paths": paths, "docs_url": url})
     optional = [a for a in (args.agents.split(",") if args.agents else []) if a in OPTIONAL_AGENTS]
-    return {
+    profile = getattr(args, "profile", None) or "yazilim"
+    cfg = {
         "_comment": "Kod Fabrikasi v3. Bos/kapali entegrasyon atlanir. Paket yalnizca git'in izledigi dosyalardan olusur.",
         "version": VERSION,
         "project_name": args.name or root.name,
         "language": args.language,
+        "profile": profile,
         "python_bin": args.python or sys.executable,
         "graphify_bin": args.graphify or "graphify",
         "framework": args.framework,
@@ -316,15 +402,31 @@ def build_config(args, root):
             "secret_name_patterns": list(DEFAULT_SECRET_NAME_PATTERNS),
         },
     }
+    if profile == "ajans":
+        opt = (getattr(args, "agency_agents", None) or "").split(",")
+        clients = [parse_client_spec(s) for s in (getattr(args, "client", None) or [])]
+        cfg["agency"] = default_agency(opt, clients)
+    return cfg
 
 
 def template_ctx(cfg):
     def bullets(items, empty="- (yok)"):
         return "\n".join(f"- `{i}`" for i in items) if items else empty
     ag = cfg.get("agents", {})
-    return {
+    a = agency(cfg)
+    ctx = {
         "PROJECT_NAME": cfg.get("project_name", ""),
         "DATE": today(),
+        "CLIENTS_DIR": a.get("clients_dir", "clients"),
+        "SHARED_DIR": a.get("shared_dir", "shared"),
+        "CREDENTIALS_DIR": a.get("credentials_dir", ".credentials"),
+        "CLIENT_LIST": ", ".join(f"`{c['slug']}` ({c.get('domain', '')})" for c in a.get("clients", [])) or "(henüz yok)",
+        "AGENCY_OPTIONAL_ROWS": "\n".join(filter(None, [
+            "| Kampanya planı, kanal/bütçe dağılımı, UTM, test planı | `reklam-stratejisti` (salt okunur; reklam hesabına dokunmaz) |" if "reklam-stratejisti" in a.get("optional_agents", []) else "",
+        ])),
+        "PROFILE_SECTION": "",
+    }
+    ctx.update({
         "FRAMEWORK": cfg.get("framework", "none"),
         "TEST_COMMANDS": bullets(cfg.get("test_commands"), "- (test komutu tanimli degil; `.claude/kod-fabrikasi.config.json` -> test_commands)"),
         "BUILD_COMMANDS": bullets(cfg.get("build_commands")),
@@ -339,7 +441,13 @@ def template_ctx(cfg):
             "| Yuksek riskli alan, sistem tasarimi, nedeni bilinmeyen hata, performans | `mimar` (yazar; once yeniden uretir, sonra kok neden) |" if "mimar" in ag.get("optional", []) else "",
             "| Auth, oturum, token, yukleme, gizli bilgi, kisisel veri dokunan degisiklik | `guvenlik-inceleyici` (salt okunur) |" if "guvenlik-inceleyici" in ag.get("optional", []) else "",
         ])),
-    }
+    })
+    if is_agency(cfg):
+        sdir = skill_dir()
+        tpl = (sdir / "assets" / "templates" / "ajans" / "CLAUDE_SECTION_AJANS.md") if sdir else None
+        if tpl and tpl.exists():
+            ctx["PROFILE_SECTION"] = render(tpl.read_text(encoding="utf-8"), ctx)
+    return ctx
 
 
 def install_agents(root, cfg, sdir, force=False):
@@ -371,6 +479,70 @@ def install_agents(root, cfg, sdir, force=False):
                     DOMAIN_DOCS_URL=e.get("docs_url") or "(belirtilmedi)")
         d.write_text(render(tpl.read_text(encoding="utf-8"), ectx), encoding="utf-8", newline="\n")
         log(f"alan uzmani yazildi: {d.relative_to(root).as_posix()}")
+    if is_agency(cfg):
+        asrc = src / "ajans"
+        a = agency(cfg)
+        for name in list(a.get("agents", AGENCY_AGENTS)) + list(a.get("optional_agents", [])):
+            s = asrc / f"{name}.md"
+            d = dst / f"{name}.md"
+            if not s.exists():
+                log(f"ajans ajan sablonu yok: {name}.md (atlandi)")
+                continue
+            if d.exists() and not force:
+                log(f"ajan korunuyor: {d.relative_to(root).as_posix()}")
+                continue
+            d.write_text(render(s.read_text(encoding="utf-8"), ctx), encoding="utf-8", newline="\n")
+            log(f"ajans ajani yazildi: {d.relative_to(root).as_posix()}")
+
+
+def client_dir_of(root, cfg, slug):
+    return root / agency(cfg).get("clients_dir", "clients") / slug
+
+
+def install_client_dir(root, cfg, sdir, client):
+    """Musteri klasoru: README, brand-guide, personas + alt klasorler (.gitkeep). Mevcut dosyaya dokunmaz."""
+    tdir = sdir / "assets" / "templates" / "ajans"
+    cdir = client_dir_of(root, cfg, client["slug"])
+    cdir.mkdir(parents=True, exist_ok=True)
+    ctx = dict(template_ctx(cfg), CLIENT_SLUG=client["slug"], CLIENT_NAME=client.get("name", client["slug"]),
+               CLIENT_DOMAIN=client.get("domain", ""), CLOUDFLARE_ZONE=client.get("cloudflare_zone", ""),
+               GSC_SITE=client.get("gsc_site", ""), GA4_PROPERTY=client.get("ga4_property", "") or "(yok)")
+    for dst_name, tpl_name in AGENCY_CLIENT_FILES.items():
+        d = cdir / dst_name
+        s = tdir / tpl_name
+        if d.exists() or not s.exists():
+            continue
+        d.write_text(render(s.read_text(encoding="utf-8"), ctx), encoding="utf-8", newline="\n")
+        log(f"musteri dosyasi: {d.relative_to(root).as_posix()}")
+    for sub in AGENCY_CLIENT_DIRS:
+        p = cdir / sub
+        p.mkdir(parents=True, exist_ok=True)
+        keep = p / ".gitkeep"
+        if not any(p.iterdir()):
+            keep.write_text("", encoding="utf-8")
+
+
+def install_agency_workspace(root, cfg, sdir):
+    a = agency(cfg)
+    tdir = sdir / "assets" / "templates" / "ajans"
+    shared = root / a.get("shared_dir", "shared")
+    shared.mkdir(parents=True, exist_ok=True)
+    ctx = template_ctx(cfg)
+    for dst_name, tpl_name in AGENCY_SHARED_FILES.items():
+        d = shared / dst_name
+        if not d.exists() and (tdir / tpl_name).exists():
+            d.write_text(render((tdir / tpl_name).read_text(encoding="utf-8"), ctx), encoding="utf-8", newline="\n")
+            log(f"ortak dosya: {d.relative_to(root).as_posix()}")
+    cred = root / a.get("credentials_dir", ".credentials")
+    cred.mkdir(parents=True, exist_ok=True)
+    for dst_name, tpl_name in (("README.md", "credentials-README.md"), ("env.example", "env.example")):
+        d = cred / dst_name
+        if not d.exists() and (tdir / tpl_name).exists():
+            d.write_text(render((tdir / tpl_name).read_text(encoding="utf-8"), ctx), encoding="utf-8", newline="\n")
+            log(f"kimlik klasoru: {d.relative_to(root).as_posix()}")
+    for c in a.get("clients", []):
+        install_client_dir(root, cfg, sdir, c)
+    (root / a.get("clients_dir", "clients")).mkdir(parents=True, exist_ok=True)
 
 
 def install_templates(root, cfg, sdir):
@@ -391,12 +563,17 @@ def install_templates(root, cfg, sdir):
         log(f"belge olusturuldu: {rel}")
 
 
-def install_scripts(root, sdir):
+def install_scripts(root, sdir, cfg=None):
     pairs = [
         (sdir / "scripts" / "kf.py", root / ".claude" / "scripts" / "kf.py"),
         (sdir / "scripts" / "faz_hafiza.py", root / ".claude" / "hooks" / "faz_hafiza.py"),
     ]
+    if is_agency(cfg):
+        pairs += [(sdir / "scripts" / "ajans" / n, root / ".claude" / "scripts" / "ajans" / n) for n in AGENCY_SCRIPTS]
     for s, d in pairs:
+        if not s.exists():
+            log(f"betik sablonu yok: {s.name} (atlandi)")
+            continue
         d.parent.mkdir(parents=True, exist_ok=True)
         if d.exists() and d.read_bytes() == s.read_bytes():
             continue
@@ -429,6 +606,15 @@ def merge_settings(root, cfg):
         if rule not in ask and f"Bash({cmd})" not in ask:
             ask.append(rule)
             ask.append(f"Bash({cmd})")
+    if is_agency(cfg):
+        cred = agency(cfg).get("credentials_dir", ".credentials")
+        for rule in AGENCY_DENY:
+            rule = rule.replace("{{CRED}}", cred)
+            if rule not in deny:
+                deny.append(rule)
+        for rule in AGENCY_ASK:
+            if rule not in ask:
+                ask.append(rule)
     hooks = data.setdefault("hooks", {})
     ss = hooks.setdefault("SessionStart", [])
     hook_cmd = f'"{python_bin(cfg)}" "$CLAUDE_PROJECT_DIR/.claude/hooks/faz_hafiza.py"'
@@ -436,7 +622,8 @@ def merge_settings(root, cfg):
         ss.append({"matcher": "startup|resume|clear|compact",
                    "hooks": [{"type": "command", "command": hook_cmd, "timeout": 15}]})
     p.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
-    log("settings.json birlestirildi (deny: .env/pem/key, ask: push/reset/canli komutlar, SessionStart hook)")
+    log("settings.json birlestirildi (deny: .env/pem/key" + ("/.credentials/dns delete" if is_agency(cfg) else "") + ", ask: push/reset/canli komutlar"
+        + ("/cloudflare yazma" if is_agency(cfg) else "") + ", SessionStart hook)")
 
 
 def install_claude_md(root, cfg, sdir):
@@ -476,9 +663,15 @@ def run_install(root, cfg, sdir, force_agents=False):
         (root / ".claude" / sub).mkdir(parents=True, exist_ok=True)
     install_templates(root, cfg, sdir)
     install_agents(root, cfg, sdir, force=force_agents)
-    install_scripts(root, sdir)
+    install_scripts(root, sdir, cfg)
     merge_settings(root, cfg)
-    ensure_lines(root / ".gitignore", GITIGNORE_LINES, ".gitignore")
+    gi_lines = list(GITIGNORE_LINES)
+    if is_agency(cfg):
+        cred = agency(cfg).get("credentials_dir", ".credentials").strip("/")
+        # `{cred}/*` (klasor degil): git, haric tutulan klasorun icinden dosya geri alamaz; README ve env.example izlensin
+        gi_lines += [f"{cred}/*", f"!{cred}/README.md", f"!{cred}/env.example", "*service-account*.json"]
+        install_agency_workspace(root, cfg, sdir)
+    ensure_lines(root / ".gitignore", gi_lines, ".gitignore")
     ga = root / ".gitattributes"
     if not ga.exists():
         ga.write_text("* text=auto eol=lf\n*.png binary\n*.jpg binary\n*.webp binary\n*.pdf binary\n*.ico binary\n", encoding="utf-8", newline="\n")
@@ -490,6 +683,7 @@ def run_install(root, cfg, sdir, force_agents=False):
 
 def print_next_steps(root, cfg):
     py = python_bin(cfg)
+    py = f'"{py}"' if " " in py else py
     print("\nSonraki adimlar:")
     if not (root / ".git").exists():
         print("  1. git init -b main            # once git; Drive/Obsidian surum kontrolu degildir")
@@ -498,6 +692,12 @@ def print_next_steps(root, cfg):
     if integ(cfg, "graphify"):
         print(f"  - {cfg.get('graphify_bin', 'graphify')} update .   # ilk kod haritasi (sonra: graphify install --project istege bagli)")
     print("  - Ajanlar birkac saniye icinde yuklenir (hot reload). 'Agent type not found' gorursen yeni oturum ac.")
+    if is_agency(cfg):
+        cred = agency(cfg).get("credentials_dir", ".credentials")
+        print(f"  - {cred}/env.example -> {cred}/.env (Cloudflare token, PageSpeed/YouTube key, service-account.json). Claude bu klasoru okuyamaz.")
+        print(f"  - Musteri ekle: {py} .claude/scripts/kf.py client add --slug musteri-a --name \"Musteri A\" --domain musteri-a.com")
+        print(f"  - Site denetimi: {py} .claude/scripts/ajans/site_audit.py --client musteri-a --crawl 10 --links")
+        print("  - pip install certifi google-auth google-api-python-client google-analytics-data youtube-transcript-api (gerektikce)")
     print("  - Faz baslatmak icin Claude'a: \"Siradaki fazi baslat.\"")
 
 
@@ -513,6 +713,7 @@ def cmd_init(args):
     if not args.framework:
         die("--framework zorunlu (flutter|go|php-laravel|python|node|rust|dotnet|none)")
     cfg = build_config(args, root)
+    cfg["skill_dir"] = str(sdir)   # proje kopyasindaki kf.py (client add, repair) sablonlari buradan bulur
     save_config(root, cfg)
     log(f"config yazildi: {config_path(root).relative_to(root).as_posix()}")
     run_install(root, cfg, sdir, force_agents=args.force)
@@ -529,8 +730,362 @@ def cmd_repair(args):
     cfg = load_config(root)
     if cfg.get("version") != VERSION:
         die(f"config v{cfg.get('version', 1)}. Once: kf.py migrate")
+    if cfg.get("skill_dir") != str(sdir):
+        cfg["skill_dir"] = str(sdir)
+        save_config(root, cfg)
     run_install(root, cfg, sdir, force_agents=args.force_agents)
     log("repair tamam.")
+    return 0
+
+
+# ---------------------------------------------------------------- profile / client (ajans)
+def cmd_profile(args):
+    """Mevcut v3 projeyi baska profile gecirir (ajans: ajanlar + betikler + calisma alani + settings eklenir)."""
+    root = project_root()
+    sdir = skill_dir()
+    if not sdir:
+        die("skill kopyasi bulunamadi (assets/ yok).")
+    cfg = load_config(root)
+    if cfg.get("version") != VERSION:
+        die(f"config v{cfg.get('version', 1)}. Once: kf.py migrate")
+    cfg["profile"] = args.profile
+    if args.profile == "ajans" and not cfg.get("agency"):
+        cfg["agency"] = default_agency((args.agency_agents or "").split(","), [parse_client_spec(s) for s in (args.client or [])])
+    elif args.profile == "ajans":
+        for s in args.client or []:
+            c = parse_client_spec(s)
+            if not any(x["slug"] == c["slug"] for x in cfg["agency"].setdefault("clients", [])):
+                cfg["agency"]["clients"].append(c)
+        for a in (args.agency_agents or "").split(","):
+            if a in AGENCY_OPTIONAL_AGENTS and a not in cfg["agency"].setdefault("optional_agents", []):
+                cfg["agency"]["optional_agents"].append(a)
+    save_config(root, cfg)
+    log(f"profil = {args.profile}")
+    run_install(root, cfg, sdir)
+    if args.profile == "yazilim":
+        log("not: ajans ajanlari/betikleri silinmedi (elle kaldir: .claude/agents/<ajans ajanlari>.md, .claude/scripts/ajans/).")
+    print_next_steps(root, cfg)
+    return 0
+
+
+def cmd_client(args):
+    root = project_root()
+    cfg = load_config(root)
+    if not is_agency(cfg):
+        die("profil 'ajans' degil. Once: kf.py profile ajans")
+    a = cfg.setdefault("agency", default_agency())
+    clients = a.setdefault("clients", [])
+    if args.op == "list":
+        if not clients:
+            print("(musteri yok) -> kf.py client add --slug x --name \"X\" --domain x.com")
+            return 0
+        for c in clients:
+            d = client_dir_of(root, cfg, c["slug"])
+            print(f"{c['slug']:<20} {c.get('name', ''):<24} {c.get('domain', ''):<28} zone={c.get('cloudflare_zone', '-')} gsc={c.get('gsc_site', '-')} ga4={c.get('ga4_property') or '-'} {'' if d.is_dir() else '(klasor YOK: repair)'}")
+        return 0
+    if args.op == "add":
+        if not (args.slug and args.domain):
+            die("client add --slug <slug> --name \"<Ad>\" --domain <alanadi> [--zone] [--gsc] [--ga4] [--url ...]")
+        spec = parse_client_spec(f"{args.slug}:{args.name or args.slug}:{args.domain}:{args.zone or ''}:{args.gsc or ''}:{args.ga4 or ''}")
+        if args.url:
+            spec["pagespeed_urls"] = list(args.url)
+        if any(c["slug"] == spec["slug"] for c in clients):
+            die(f"musteri zaten var: {spec['slug']} (config'i elle duzenle ya da client remove)")
+        clients.append(spec)
+        save_config(root, cfg)
+        sdir = skill_dir()
+        if sdir:
+            install_client_dir(root, cfg, sdir, spec)
+            install_claude_md(root, cfg, sdir)
+        else:
+            log("skill kopyasi yok; musteri klasoru sablonsuz acildi. Sonra: kf.py repair")
+            client_dir_of(root, cfg, spec["slug"]).mkdir(parents=True, exist_ok=True)
+        log(f"musteri eklendi: {spec['slug']} ({spec['domain']}) -> {client_dir_of(root, cfg, spec['slug']).relative_to(root).as_posix()}/")
+        print("Sonraki: brand-guide.md ve personas.md doldur; Cloudflare token bu zone'u goruyor mu: "
+              f"python .claude/scripts/ajans/cloudflare_ops.py check --client {spec['slug']}")
+        return 0
+    if args.op == "remove":
+        before = len(clients)
+        a["clients"] = [c for c in clients if c["slug"] != args.slug]
+        if len(a["clients"]) == before:
+            die(f"musteri yok: {args.slug}")
+        save_config(root, cfg)
+        sdir = skill_dir()
+        if sdir:
+            install_claude_md(root, cfg, sdir)
+        log(f"config'ten cikarildi: {args.slug}. Klasor SILINMEDI ({client_dir_of(root, cfg, args.slug).relative_to(root).as_posix()}/); arsivlemek sana kalmis.")
+        return 0
+    return 0
+
+
+# ---------------------------------------------------------------- plugins (guclendirme)
+PLUG_MARK = "<!-- kf:plugins:start -->"
+PLUG_MARK_END = "<!-- kf:plugins:end -->"
+OFFICIAL = "claude-plugins-official"
+# Katalog: Anthropic'in yayimladigi plugin'ler (resmi marketplace ya da claude.ai Plugin Dizini) -> hangi ajan hangi skill'i ne zaman cagirir.
+# market: official (claude plugin install <id>@claude-plugins-official) | synced (claude.ai -> Ayarlar -> Plugin'ler; terminalde <id>@synced)
+# seviye: agents (alt ajan Skill araciyla cagirir) | orchestrator (ana oturum; ajan baslatan skill'ler) | env (kurulu olmasi yeter: LSP, hook)
+PLUGIN_CATALOG = [
+    {"id": "typescript-lsp", "market": "official", "profile": "her ikisi", "frameworks": ["node"], "env": True,
+     "why": "TS/JS kod zekasi: tanim/referans, tip hatalari (kesifci, gelistirici, tester daha az arama yapar)"},
+    {"id": "pyright-lsp", "market": "official", "profile": "her ikisi", "frameworks": ["python"], "env": True, "why": "Python tip denetimi ve kod zekasi"},
+    {"id": "gopls-lsp", "market": "official", "profile": "her ikisi", "frameworks": ["go"], "env": True, "why": "Go kod zekasi"},
+    {"id": "php-lsp", "market": "official", "profile": "her ikisi", "frameworks": ["php-laravel"], "env": True, "why": "PHP (Intelephense) kod zekasi"},
+    {"id": "rust-analyzer-lsp", "market": "official", "profile": "her ikisi", "frameworks": ["rust"], "env": True, "why": "Rust kod zekasi"},
+    {"id": "csharp-lsp", "market": "official", "profile": "her ikisi", "frameworks": ["dotnet"], "env": True, "why": "C# kod zekasi"},
+    {"id": "security-guidance", "market": "official", "profile": "her ikisi", "env": True,
+     "why": "Her duzenlemede guvenlik kalip uyarisi + Stop'ta diff incelemesi; gelistirici'nin isine otomatik eslik eder (hook tabanli)"},
+    {"id": "pr-review-toolkit", "market": "official", "profile": "her ikisi",
+     "why": "6 uzman inceleme ajani (sessiz hata, test, tip tasarimi, yorum, kalite)",
+     "orchestrator": [("/pr-review-toolkit:review-pr", "Adim 5'te reviewer ile PARALEL ikinci goz; bulgular yine koda bakilarak teyit edilir")]},
+    {"id": "claude-security", "market": "official", "profile": "her ikisi",
+     "why": "Derin zafiyet taramasi; her bulgu dogrulanir",
+     "orchestrator": [("/claude-security:claude-security", "Yuksek riskli alan dokunan fazda guvenlik-inceleyici'den ONCE; raporu brife ekle")]},
+    {"id": "feature-dev", "market": "official", "profile": "her ikisi",
+     "why": "Kesif + mimari + inceleme ajanlariyla ozellik gelistirme akisi",
+     "orchestrator": [("/feature-dev:feature-dev", "Buyuk ozellikte Adim 1-2 alternatifi (kesif + tasarim); cikan plan yine kullanici ONAY'ina gelir, uygulama gelistirici ile")]},
+    {"id": "frontend-design", "market": "official", "profile": "her ikisi",
+     "why": "Jenerik AI gorunumunden uzak, uretim kalitesinde arayuz",
+     "agents": {"gelistirici": [("/frontend-design:frontend-design", "UI / sayfa / komponent / landing page isinde, kod yazmadan once")]}},
+    {"id": "claude-md-management", "market": "official", "profile": "her ikisi",
+     "why": "CLAUDE.md kalite denetimi ve sadelestirme",
+     "orchestrator": [("/claude-md-management:revise-claude-md", "CLAUDE.md 200 satiri astiginda ya da oturum ogrenimlerini isleyerken (isaretli kod-fabrikasi bolumune dokunma)")]},
+    {"id": "engineering", "market": "synced", "profile": "her ikisi",
+     "why": "Anthropic 'knowledge work' muhendislik skill'leri: mimari, sistem tasarimi, hata ayiklama, test stratejisi, dagitim kontrol listesi",
+     "agents": {"mimar": [("/engineering:architecture", "tasarim karari / ADR adayi uretirken"), ("/engineering:system-design", "yeni servis / veri akisi tasarlarken"), ("/engineering:debug", "kok neden analizinde")],
+                "tester": [("/engineering:testing-strategy", "brifte 'eksik test onerisi' istendiginde; test yazmazsin, oneri uretirsin")]},
+     "orchestrator": [("/engineering:deploy-checklist", "canliya yazan komut / deploy oncesi (kullanici isterse)")]},
+    {"id": "coding-skills", "market": "synced", "profile": "her ikisi",
+     "why": "Kod incelemesini gecip uretimde patlayan hatalar (write skew, idempotency, zaman dilimi, coordinated omission)",
+     "agents": {"gelistirici": [("/coding-skills:<ilgili-skill>", "eszamanlilik, idempotency, zaman/tarih, yeniden deneme dokunan iste; once `coding-skills` skill listesine bak")],
+                "reviewer": [("/coding-skills:<ilgili-skill>", "diff eszamanlilik / veri tutarliligi iceriyorsa kontrol listesi olarak")]}},
+    {"id": "backend-design", "market": "synced", "profile": "her ikisi",
+     "why": "Kidemli backend reflexleri: API, veri modeli, servis sinirlari",
+     "agents": {"mimar": [("/backend-design:<ilgili-skill>", "API / servis / veri modeli tasarlarken")]}},
+    {"id": "searchfit-seo", "market": "synced", "profile": "ajans",
+     "why": "SEO araci seti (SearchFit; Anthropic katalogunda): teknik SEO, on-page, schema, ic baglanti, anahtar kelime kumeleme, icerik stratejisi, AI gorunurlugu",
+     "agents": {"seo-teknisyeni": [("/searchfit-seo:technical-seo", "betik bulgularini derinlestirip aksiyona cevirirken"), ("/searchfit-seo:on-page-seo", "tek sayfa optimizasyon onerisinde"),
+                                   ("/searchfit-seo:schema-markup", "JSON-LD eksiginde hazir sema uretmek icin"), ("/searchfit-seo:internal-linking", "ic baglanti / yetim sayfa analizinde"),
+                                   ("/searchfit-seo:keyword-clustering", "GSC sorgu listesini kumelerken")],
+                "site-denetcisi": [("/searchfit-seo:seo-audit", "site_audit.py raporuna ek kontrol listesi olarak (ayni siteyi tekrar tarama)"), ("/searchfit-seo:broken-links", "kirik baglanti bulgusunu siniflarken")],
+                "rakip-analisti": [("/searchfit-seo:content-strategy", "icerik boslugu tablosundan plan cikarirken"), ("/searchfit-seo:content-brief", "ilk 3 icerik onerisini brife cevirirken"), ("/searchfit-seo:ai-visibility", "markanin AI cevaplarinda gorunurlugu sorulursa")],
+                "metin-yazari": [("/searchfit-seo:content-brief", "blog / SEO icerigi yazmadan once brif yoksa")]},
+     "orchestrator": [("searchfit-seo:competitor-analyzer (ajan)", "rakip-analisti ile paralel ikinci goz; cikti yine musteri klasorune, slug izolasyonu brife yazilir")]},
+    {"id": "marketing", "market": "synced", "profile": "ajans",
+     "why": "Anthropic 'knowledge work' pazarlama skill'leri: icerik, kampanya plani, marka incelemesi, e-posta dizisi, performans raporu",
+     "agents": {"metin-yazari": [("/marketing:content-creation", "uzun icerik / blog"), ("/marketing:draft-content", "sosyal / reklam varyantlari"), ("/marketing:email-sequence", "e-posta dizisi")],
+                "marka-denetcisi": [("/marketing:brand-review", "marka tonu denetiminde ikinci kontrol listesi; karar yine senin")],
+                "reklam-stratejisti": [("/marketing:campaign-plan", "kampanya plani iskeleti"), ("/marketing:competitive-brief", "rakip ozeti"), ("/marketing:performance-report", "kampanya sonuc raporu")],
+                "seo-teknisyeni": [("/marketing:performance-report", "aylik rapor formati icin")]}},
+    {"id": "cloudflare", "market": "synced", "profile": "ajans",
+     "why": "Cloudflare platform rehberi skill'leri (workers, wrangler, web-perf) + resmi Cloudflare MCP sunucusu",
+     "agents": {"cloudflare-operatoru": [("/cloudflare:cloudflare", "ayar / urun sorusunda resmi rehber"), ("/cloudflare:web-perf", "cache / CWV iyilestirme onerisinde"), ("/cloudflare:wrangler", "Pages/Workers dagitim durumu sorusunda")],
+                "gelistirici": [("/cloudflare:frameworks-on-cloudflare", "site Pages/Workers'a dagitilacaksa"), ("/cloudflare:workers-best-practices", "Worker kodu yazarken")]},
+     "settings_ask": ["mcp__plugin_cloudflare_cloudflare", "mcp__cloudflare"],
+     "note": "MCP sunucusu yazma da yapabilir: operatör MCP ile yalnizca okur, yazma yalnizca cloudflare_ops.py (--yes). settings ask kurali eklenir."},
+    {"id": "website-design", "market": "synced", "profile": "ajans",
+     "why": "Gercek sitelerden tasarim yonu secen landing page akisi (UXKIN; Anthropic dizininde)",
+     "agents": {"gelistirici": [("/website-design:<ilgili-skill>", "landing page / site tasarimina baslarken DESIGN.md uretmek icin")]}},
+]
+
+
+def installed_plugins():
+    """{kisa_ad: {"id":..., "scope":..., "enabled":...}}. Once `claude plugin list --json`, olmazsa dosyalardan."""
+    found = {}
+    exe = shutil.which("claude")
+    if exe:
+        try:
+            r = run([exe, "plugin", "list", "--json"], timeout=60)
+            if r.returncode == 0 and r.stdout.strip().startswith("["):
+                for p in json.loads(r.stdout):
+                    pid = p.get("id", "")
+                    found[pid.split("@")[0]] = {"id": pid, "scope": p.get("scope", "?"), "enabled": p.get("enabled", True)}
+                return found
+        except Exception:
+            pass
+    reg = Path.home() / ".claude" / "plugins" / "installed_plugins.json"
+    try:
+        for pid in (json.loads(reg.read_text(encoding="utf-8")).get("plugins") or {}):
+            found[pid.split("@")[0]] = {"id": pid, "scope": "user", "enabled": True}
+    except Exception:
+        pass
+    for sdir_ in (Path.home() / ".claude" / "plugins" / "synced").glob("*/"):
+        for d in sdir_.iterdir():
+            if not d.is_dir():
+                continue
+            pj = d / ".claude-plugin" / "plugin.json"
+            if pj.exists():
+                try:
+                    name = json.loads(pj.read_text(encoding="utf-8")).get("name") or d.name
+                except Exception:
+                    name = d.name
+                name = name.split("~")[0]
+                found.setdefault(name, {"id": f"{name}@synced", "scope": "synced", "enabled": True})
+    return found
+
+
+def plugin_relevant(entry, cfg):
+    prof = profile_of(cfg)
+    if entry.get("profile") not in ("her ikisi", prof):
+        return False
+    fw = entry.get("frameworks")
+    if fw and (cfg.get("framework") or "none") not in fw:
+        return False
+    return True
+
+
+def plugin_install_hint(entry):
+    if entry["market"] == "official":
+        return f"claude plugin install {entry['id']}@{OFFICIAL}"
+    return "claude.ai -> Ayarlar -> Plugin'ler -> Dizin'den yukle (terminalde " + entry["id"] + "@synced olarak gorunur)"
+
+
+def plugin_block_for_agent(agent, entries):
+    lines = []
+    for e in entries:
+        for skill, when in (e.get("agents") or {}).get(agent, []):
+            lines.append(f"- `{skill}` — {when}")
+    if not lines:
+        return ""
+    return (f"{PLUG_MARK}\n## Güçlendirmeler (kurulu plugin skill'leri)\n\n"
+            "Brif gerektirdiğinde şu skill'leri `Skill` aracıyla çağır; skill yoksa ya da hata verirse normal akışla devam et. "
+            "Skill çıktısı öneri niteliğindedir: bu dosyadaki kurallar (yazma sınırı, salt okunurluk, rapor formatı) her zaman üstündür. Başka ajan başlatan skill çağırma.\n\n"
+            + "\n".join(lines) + f"\n{PLUG_MARK_END}\n")
+
+
+def set_agent_plugin_block(path: Path, block):
+    """Isaretli blogu ekler/gunceller/siler ve `Skill` aracini tools'a ekler/cikarir. Degisiklik olduysa True."""
+    text = path.read_text(encoding="utf-8")
+    orig = text
+    if PLUG_MARK in text:
+        text = re.sub(re.escape(PLUG_MARK) + r".*?" + re.escape(PLUG_MARK_END) + r"\n?", block, text, flags=re.S)
+    elif block:
+        if "\n## Verimli çalış" in text:
+            text = text.replace("\n## Verimli çalış", "\n" + block + "\n## Verimli çalış", 1)
+        else:
+            text = text.rstrip("\n") + "\n\n" + block
+    m = re.search(r"^tools:\s*(.*)$", text, re.M)
+    if m:
+        tools = [t.strip() for t in m.group(1).strip("[]").split(",") if t.strip()]
+        if block and "Skill" not in tools:
+            tools.append("Skill")
+        if not block and "Skill" in tools:
+            tools.remove("Skill")
+        text = text[:m.start()] + "tools: " + ", ".join(tools) + text[m.end():]
+    if text != orig:
+        path.write_text(text, encoding="utf-8", newline="\n")
+        return True
+    return False
+
+
+def set_marked_block(path: Path, block, title_hint=""):
+    if not path.exists():
+        return False
+    text = path.read_text(encoding="utf-8")
+    orig = text
+    if PLUG_MARK in text:
+        text = re.sub(re.escape(PLUG_MARK) + r".*?" + re.escape(PLUG_MARK_END) + r"\n?", block, text, flags=re.S)
+    elif block:
+        text = text.rstrip("\n") + "\n\n" + block
+    if text != orig:
+        path.write_text(text, encoding="utf-8", newline="\n")
+        return True
+    return False
+
+
+def cmd_plugins(args):
+    root = project_root()
+    cfg = load_config(root)
+    inst = installed_plugins()
+    relevant = [e for e in PLUGIN_CATALOG if plugin_relevant(e, cfg)]
+    agents_installed = {p.stem for p in (root / ".claude" / "agents").glob("*.md")}
+    applied = set((cfg.get("plugins") or {}).get("applied") or [])
+
+    if args.remove:
+        n = 0
+        for p in (root / ".claude" / "agents").glob("*.md"):
+            n += set_agent_plugin_block(p, "")
+        set_marked_block(root / phase_files(cfg)["faz_prompt"], "")
+        cfg["plugins"] = {"applied": [], "skill_tool_added_to": []}
+        save_config(root, cfg)
+        log(f"guclendirme bloklari kaldirildi ({n} ajan dosyasi). settings.json ask kurallari elle kaldirilabilir (mcp__cloudflare...).")
+        return 0
+
+    rows = []
+    to_apply = []
+    for e in relevant:
+        st = inst.get(e["id"])
+        if st and not st.get("enabled", True):
+            durum = "kurulu (DEVRE DISI)"
+        elif st:
+            durum = "uygulanmis" if e["id"] in applied else "kurulu"
+            to_apply.append(e)
+        else:
+            durum = "yok"
+        targets = sorted((e.get("agents") or {}).keys())
+        if e.get("orchestrator"):
+            targets.append("ana oturum")
+        if e.get("env"):
+            targets.append("ortam")
+        rows.append((e["id"], e["market"], durum, ", ".join(targets), e["why"], plugin_install_hint(e)))
+
+    if args.apply:
+        if args.only:
+            want = {s.strip() for s in args.only.split(",")}
+            to_apply = [e for e in to_apply if e["id"] in want]
+        changed = []
+        for agent in sorted(agents_installed):
+            block = plugin_block_for_agent(agent, to_apply)
+            if set_agent_plugin_block(root / ".claude" / "agents" / f"{agent}.md", block):
+                changed.append(agent)
+        orch = [(e["id"], s, w) for e in to_apply for s, w in (e.get("orchestrator") or [])]
+        env = [(e["id"], e["why"]) for e in to_apply if e.get("env")]
+        oblock = ""
+        if orch or env:
+            oblock = f"{PLUG_MARK}\n## Güçlendirmeler (ana oturum; `kf.py plugins --apply` yazdı)\n\n"
+            if orch:
+                oblock += "Kurulu plugin skill'leri; ilgili adımda çağır, çıktıyı yine koda bakarak teyit et:\n\n" + "\n".join(f"- `{s}` ({pid}) — {w}" for pid, s, w in orch) + "\n"
+            if env:
+                oblock += "\nOrtam plugin'leri (otomatik çalışır): " + ", ".join(f"`{pid}` ({w})" for pid, w in env) + "\n"
+            oblock += PLUG_MARK_END + "\n"
+        set_marked_block(root / phase_files(cfg)["faz_prompt"], oblock)
+        asks = [r for e in to_apply for r in (e.get("settings_ask") or [])]
+        if asks:
+            sp = root / ".claude" / "settings.json"
+            try:
+                s = json.loads(sp.read_text(encoding="utf-8")) if sp.exists() else {}
+                ask = s.setdefault("permissions", {}).setdefault("ask", [])
+                added = [r for r in asks if r not in ask]
+                ask.extend(added)
+                if added:
+                    sp.write_text(json.dumps(s, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
+                    log(f"settings ask eklendi: {', '.join(added)}")
+            except json.JSONDecodeError as e:
+                log(f"settings.json bozuk ({e}); ask kurali eklenmedi")
+        cfg["plugins"] = {"applied": sorted(e["id"] for e in to_apply),
+                          "skill_tool_added_to": sorted(a for a in agents_installed if plugin_block_for_agent(a, to_apply))}
+        save_config(root, cfg)
+        log(f"uygulandi: {', '.join(cfg['plugins']['applied']) or '(kurulu ilgili plugin yok)'}; ajan dosyasi guncellendi: {', '.join(changed) or '-'}")
+        if any(e.get("note") for e in to_apply):
+            for e in to_apply:
+                if e.get("note"):
+                    log(f"NOT {e['id']}: {e['note']}")
+        log("ajan dosyalari degisti: Claude Code birkac saniyede yeniden yukler; olmazsa yeni oturum.")
+        return 0
+
+    print(f"Profil: {profile_of(cfg)} · framework: {cfg.get('framework')} · kurulu plugin: {len(inst)}\n")
+    w = max(len(r[0]) for r in rows) if rows else 10
+    for pid, market, durum, targets, why, hint in rows:
+        print(f"{pid:<{w}}  {market:<8}  {durum:<20}  -> {targets}")
+        print(f"{'':<{w}}  {why}")
+        if durum == "yok":
+            print(f"{'':<{w}}  kur: {hint}")
+    missing = [r for r in rows if r[2] == "yok"]
+    ready = [r for r in rows if r[2] == "kurulu"]
+    print(f"\n{len(rows)} oneri: {len(ready)} kurulu/uygulanmamis, {len([r for r in rows if r[2] == 'uygulanmis'])} uygulanmis, {len(missing)} yok.")
+    if ready:
+        print("Uygula: python .claude/scripts/kf.py plugins --apply   (ajan dosyalarina 'Guclendirmeler' blogu + Skill araci)")
+    print("Kaldir: python .claude/scripts/kf.py plugins --remove")
     return 0
 
 
@@ -1047,6 +1602,8 @@ def cmd_selftest(args):
     adir = root / ".claude" / "agents"
     ag = cfg.get("agents", {})
     expected = list(ag.get("core", CORE_AGENTS)) + list(ag.get("optional", [])) + [e["name"] for e in ag.get("domain_experts", [])]
+    if is_agency(cfg):
+        expected += list(agency(cfg).get("agents", AGENCY_AGENTS)) + list(agency(cfg).get("optional_agents", []))
     for name in expected:
         p = adir / f"{name}.md"
         if not p.exists():
@@ -1056,7 +1613,7 @@ def cmd_selftest(args):
         ok = fm.get("name") == name and bool(fm.get("description"))
         rec("PASS" if ok else "FAIL", f"ajan {name}: name/description")
         tools = {t.strip() for t in fm.get("tools", "").strip("[]").split(",") if t.strip()}
-        ro = name in READ_ONLY_AGENTS or name in [e["name"] for e in ag.get("domain_experts", [])]
+        ro = name in READ_ONLY_AGENTS or name in AGENCY_READ_ONLY or name in [e["name"] for e in ag.get("domain_experts", [])]
         if ro:
             rec("PASS" if tools and not (tools & EDIT_TOOLS) else "FAIL", f"ajan {name}: salt okunur (Edit/Write yok)")
         if name == "faz-arsivcisi":
@@ -1119,6 +1676,46 @@ def cmd_selftest(args):
         rec("PASS" if r.returncode == 0 else "FAIL", "notebooklm-py python_bin'e kurulu")
     if integ(cfg, "drive"):
         rec("PASS" if Path(integ(cfg, "drive").get("folder_path", "")).is_dir() else "WARN", "Drive klasoru erisilebilir")
+    # plugin guclendirmeleri
+    pl = cfg.get("plugins") or {}
+    if pl.get("applied"):
+        inst = installed_plugins()
+        for pid in pl["applied"]:
+            rec("PASS" if pid in inst and inst[pid].get("enabled", True) else "WARN", f"plugin uygulanmis ve kurulu: {pid}" + ("" if pid in inst else " (kaldirilmis; kf.py plugins --apply ile yenile)"))
+        for name in pl.get("skill_tool_added_to", []):
+            p = adir / f"{name}.md"
+            if p.exists():
+                fm, body = read_frontmatter(p)
+                rec("PASS" if "Skill" in fm.get("tools", "") and PLUG_MARK in body else "WARN", f"ajan {name}: guclendirme blogu + Skill araci")
+    # ajans profili
+    if is_agency(cfg):
+        a = agency(cfg)
+        cred = a.get("credentials_dir", ".credentials").strip("/")
+        for n in AGENCY_SCRIPTS:
+            rec("PASS" if (root / ".claude" / "scripts" / "ajans" / n).exists() else "FAIL", f"ajans betigi: .claude/scripts/ajans/{n}")
+        rec("PASS" if (f"{cred}/*" in gl or f"{cred}/" in gl) else "FAIL", f".gitignore: {cred}/*")
+        r = run(["git", "ls-files", cred], cwd=root)
+        tracked_cred = [f for f in r.stdout.splitlines() if f and not f.endswith(("README.md", "env.example"))]
+        rec("PASS" if not tracked_cred else "FAIL", f"{cred}/ icinde git'in izledigi sir yok" + (f": {', '.join(tracked_cred)}" if tracked_cred else ""))
+        if sp.exists():
+            try:
+                s = json.loads(sp.read_text(encoding="utf-8"))
+                deny = (s.get("permissions") or {}).get("deny") or []
+                ask = (s.get("permissions") or {}).get("ask") or []
+                rec("PASS" if any(cred in d for d in deny) else "FAIL", f"settings deny: {cred}/")
+                rec("PASS" if any("dns delete" in d for d in deny) else "FAIL", "settings deny: cloudflare dns delete")
+                rec("PASS" if any("cloudflare_ops.py purge" in x for x in ask) else "FAIL", "settings ask: cloudflare purge/yazma")
+            except json.JSONDecodeError:
+                pass
+        for d in (a.get("shared_dir", "shared"), a.get("clients_dir", "clients")):
+            rec("PASS" if (root / d).is_dir() else "FAIL", f"klasor: {d}/")
+        for c in a.get("clients", []):
+            cd = client_dir_of(root, cfg, c["slug"])
+            rec("PASS" if (cd / "brand-guide.md").exists() else "FAIL", f"musteri {c['slug']}: brand-guide.md")
+            rec("PASS" if c.get("domain") else "WARN", f"musteri {c['slug']}: domain")
+        rec("PASS" if run([pyb, "-c", "import certifi"], timeout=60).returncode == 0 else "WARN", "certifi kurulu (TLS kok sertifikalari; pip install certifi)")
+        rec("PASS" if (root / cred / ".env").exists() else "WARN", f"{cred}/.env var (Cloudflare/Google anahtarlari)")
+        rec("PASS" if (root / cred / "service-account.json").exists() else "WARN", f"{cred}/service-account.json var (GSC/GA4)")
     # gizli bilgi
     r = run([pyb, str(root / ".claude" / "scripts" / "kf.py"), "secret-scan"], cwd=root, timeout=120)
     rec("PASS" if r.returncode == 0 else "FAIL", "izlenen dosyalarda gizli bilgi taramasi temiz")
@@ -1166,6 +1763,9 @@ def main(argv=None):
     p.add_argument("--drive", help="Google Drive klasoru (bos = kapali)")
     p.add_argument("--notebook", help="NotebookLM notebook id (bos = kapali)")
     p.add_argument("--obsidian", help="Obsidian kasa yolu (bos = kapali)")
+    p.add_argument("--profile", choices=PROFILES, default="yazilim", help="yazilim (varsayilan) | ajans (dijital ajans katmani)")
+    p.add_argument("--client", action="append", help="ajans: slug:Ad:domain[:zone[:gsc_site[:ga4]]] (tekrarlanabilir)")
+    p.add_argument("--agency-agents", help="ajans istege bagli ajanlar, virgulle: reklam-stratejisti")
     p.add_argument("--force", action="store_true", help="config ve ajanlarin ustune yaz")
     p.set_defaults(fn=cmd_init)
 
@@ -1177,6 +1777,25 @@ def main(argv=None):
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--remove-legacy", action="store_true", help="kokteki eski bundle.py/Makefile/setup-hooks.sh kaldir")
     p.set_defaults(fn=cmd_migrate)
+
+    p = sub.add_parser("profile", help="profil degistir: yazilim | ajans (mevcut v3 projeye ajans katmani ekler)")
+    p.add_argument("profile", choices=PROFILES)
+    p.add_argument("--client", action="append", help="slug:Ad:domain[:zone[:gsc_site[:ga4]]]")
+    p.add_argument("--agency-agents", help="reklam-stratejisti")
+    p.set_defaults(fn=cmd_profile)
+
+    p = sub.add_parser("client", help="ajans musterileri: list | add | remove")
+    p.add_argument("op", choices=["list", "add", "remove"])
+    p.add_argument("--slug"); p.add_argument("--name"); p.add_argument("--domain")
+    p.add_argument("--zone", help="Cloudflare zone (varsayilan domain)"); p.add_argument("--gsc", help="sc-domain:x.com ya da https://x.com/")
+    p.add_argument("--ga4", help="GA4 property id"); p.add_argument("--url", action="append", help="PageSpeed icin URL (tekrarlanabilir)")
+    p.set_defaults(fn=cmd_client)
+
+    p = sub.add_parser("plugins", help="onerilen Anthropic plugin'leri: listele | --apply (ajanlara entegre et) | --remove")
+    p.add_argument("--apply", action="store_true", help="kurulu ve ilgili plugin'leri ajan dosyalarina isle")
+    p.add_argument("--only", help="yalnizca su plugin id'leri (virgulle)")
+    p.add_argument("--remove", action="store_true", help="guclendirme bloklarini kaldir")
+    p.set_defaults(fn=cmd_plugins)
 
     sub.add_parser("hooks", help="git hook'larini kur").set_defaults(fn=cmd_hooks)
 

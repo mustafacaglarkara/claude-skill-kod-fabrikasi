@@ -3,6 +3,9 @@
   "version": 3,
   "project_name": "<proje-adi>",
   "language": "tr",
+  "_profile_note": "yazilim (varsayilan) | ajans. ajans: cekirdek ekip + agency blogu (asagida). skill_dir: init'in kaydettigi skill kopyasi; proje kopyasindaki kf.py (client add, repair) sablonlari buradan bulur.",
+  "profile": "yazilim",
+  "skill_dir": "C:\\Users\\<kullanici>\\.claude\\skills\\kod-fabrikasi",
 
   "python_bin": "C:\\Users\\<kullanici>\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
   "graphify_bin": "graphify",
@@ -24,6 +27,26 @@
       { "name": "odeme-uzmani", "domain": "Odeme saglayici API", "paths": ["src/payments/"], "docs_url": "" }
     ],
     "max_parallel_editors": 3
+  },
+
+  "_agency_note": "Yalnizca profile = ajans. clients[]: slug = clients/<slug>/ klasoru; betikler --client <slug> ile domain/zone/gsc/ga4/pagespeed degerlerini alir. optional_agents: reklam-stratejisti.",
+  "agency": {
+    "clients_dir": "clients",
+    "shared_dir": "shared",
+    "credentials_dir": ".credentials",
+    "agents": ["metin-yazari", "marka-denetcisi", "seo-teknisyeni", "rakip-analisti", "site-denetcisi", "cloudflare-operatoru"],
+    "optional_agents": ["reklam-stratejisti"],
+    "clients": [
+      {
+        "slug": "musteri-a",
+        "name": "Musteri A",
+        "domain": "musteri-a.com",
+        "cloudflare_zone": "musteri-a.com",
+        "gsc_site": "sc-domain:musteri-a.com",
+        "ga4_property": "123456789",
+        "pagespeed_urls": ["https://musteri-a.com/", "https://musteri-a.com/hizmetler/"]
+      }
+    ]
   },
 
   "phase_files": {

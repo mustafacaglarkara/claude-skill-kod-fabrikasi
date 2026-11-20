@@ -1,10 +1,10 @@
-# Kod Fabrikası — Claude Code Skill (v3.0)
+# Kod Fabrikası — Claude Code Skill (v3.1)
 
-> **EN:** AI-powered software factory for Claude Code: the main session orchestrates a team of subagents (scout, developer, tester, reviewer, archivist + optional architect, security reviewer, domain experts), keeps project memory across sessions (PROGRESS / ADR / open questions + a SessionStart hook), maps the code with graphify, enforces permission rules, and optionally mirrors docs and code to Google Drive, NotebookLM and Obsidian. One Python CLI (`kf.py`), one per-project config, Windows/macOS/Linux. Documentation is in Turkish.
+> **EN:** AI-powered software factory for Claude Code: the main session orchestrates a team of subagents (scout, developer, tester, reviewer, archivist + optional architect, security reviewer, domain experts), keeps project memory across sessions (PROGRESS / ADR / open questions + a SessionStart hook), maps the code with graphify, enforces permission rules, and optionally mirrors docs and code to Google Drive, NotebookLM and Obsidian. v3.1 adds a **digital agency profile**: per-client isolation, copywriter + brand/policy guardian QA gate, SEO technician (Search Console / GA4 / PageSpeed), competitor analyst (site + YouTube → NotebookLM), live-site auditor and a Cloudflare operator (plan → approve → apply). One Python CLI (`kf.py`), one per-project config, Windows/macOS/Linux. Documentation is in Turkish.
 
 **TR:** Ana Claude Code oturumu **orkestratördür**: işi böler, `.claude/agents/` altındaki uzman ajanlara brif verir, sonuçları birleştirir. Kodu yazan ajan kendi işini onaylamaz. Proje hafızası `.claude/` altındaki belgelerde durur ve her oturuma otomatik yüklenir. Kod haritası graphify; Drive / NotebookLM / Obsidian isteğe bağlı. Tek komut arayüzü `kf.py`; `make` ve bash gerekmez.
 
-**v3.0:** ajan ekibi + faz hafızası + `kf.py`. v2'den geçiş: `kf.py migrate` (bkz. [CHANGELOG.md](CHANGELOG.md)).
+**v3.1:** `yazilim` profili (v3.0 ile aynı) + **`ajans` profili** (dijital ajans katmanı). v2'den geçiş: `kf.py migrate`; ajans katmanı: `kf.py profile ajans` (bkz. [CHANGELOG.md](CHANGELOG.md)).
 
 ---
 
@@ -53,6 +53,33 @@ Her ajan dosyasında ortak **"Verimli çalış"** bloğu (harita önce, aralık 
 
 ---
 
+## 🏢 Dijital ajans profili (v3.1)
+
+```bash
+python ~/.claude/skills/kod-fabrikasi/scripts/kf.py init --framework node --test-cmd "npm test" \
+  --profile ajans --client "musteri-a:Müşteri A:musteri-a.com" --agency-agents reklam-stratejisti
+# ya da mevcut v3 projede:  python .claude/scripts/kf.py profile ajans --client "musteri-a:Müşteri A:musteri-a.com"
+python .claude/scripts/kf.py client add --slug musteri-b --name "Müşteri B" --domain musteri-b.com --ga4 123456
+cp .credentials/env.example .credentials/.env   # Cloudflare token, PageSpeed/YouTube key; service-account.json (GSC/GA4) — Claude okuyamaz
+python .claude/scripts/kf.py selftest
+```
+
+| Ajan | Yazar | Görev | Kapı |
+| --- | --- | --- | --- |
+| `metin-yazari` | yalnızca `clients/<slug>/campaigns|content` | reklam, sosyal, e-posta, blog, video senaryosu | → `marka-denetcisi` |
+| `marka-denetcisi` | ❌ | ton, yasaklı kelime, Meta/Google/TikTok politikası, iddia, kanca, müşteriler arası sızıntı | ONAY olmadan teslim yok |
+| `seo-teknisyeni` | ❌ | GSC / GA4 / PageSpeed → öncelikli aksiyon listesi | — |
+| `rakip-analisti` | ❌ | rakip hiyerarşi / schema / içerik boşluğu, YouTube transkript → NotebookLM | — |
+| `site-denetcisi` | ❌ | yaptığımız siteyi teslim öncesi / yayın sonrası / periyodik test | "yayına hazır" yalnızca raporla |
+| `cloudflare-operatoru` | API (`--yes`) | zone sağlığı, purge, 301, DNS, SSL/WAF, dev-mode, under-attack, Pages durumu | PLAN → onay → `--yes` |
+| `reklam-stratejisti` (isteğe bağlı) | ❌ | kanal / bütçe / huni / UTM / test planı | — |
+
+**Plugin güçlendirmeleri (isteğe bağlı):** `kf.py plugins` profil ve framework'e göre Anthropic plugin'lerini önerir (`typescript-lsp`, `security-guidance`, `pr-review-toolkit`, `engineering`; ajansta `searchfit-seo`, `marketing`, `cloudflare`...). Kurulum sırasında bir kez sorulur; kurulanlar `kf.py plugins --apply` ile ilgili ajana "Güçlendirmeler" bloğu + `Skill` aracı olarak işlenir, `--remove` geri alır. Kurulmazsa varsayılan ajanlar aynen çalışır. Katalog ve değerlendirme: [references/plugins.md](references/plugins.md). Gelecek planı (finans katmanı vb.): [references/yol-haritasi.md](references/yol-haritasi.md).
+
+Müşteriler `clients/<slug>/` altında izole (brand-guide, personas, campaigns, seo/reports, audits, research, youtube-research, infra). Betikler `.claude/scripts/ajans/`: `cloudflare_ops.py` · `site_audit.py` · `pagespeed_check.py` · `gsc_query.py` · `ga4_query.py` · `youtube_fetch.py` (stdlib; `--client <slug> --out dosya`; kimlikler `.credentials/.env`'den, asla yazdırılmaz). Cloudflare yazma komutları `--yes` olmadan yalnızca PLAN basar, settings.json `ask` ile ikinci kez sorulur, `dns delete` Claude için yasak, zone silme yok. Akışlar: [references/ajans.md](references/ajans.md) · Cloudflare: [references/cloudflare.md](references/cloudflare.md).
+
+---
+
 ## 🏗️ Yapı
 
 ```text
@@ -60,14 +87,16 @@ Her ajan dosyasında ortak **"Verimli çalış"** bloğu (harita önce, aralık 
 ├── SKILL.md                      # Claude'un okuduğu ana dosya
 ├── references/                   # workflow · ajanlar · hafiza · kurulum-rehberi · faz-raporu-sablonu · notebooklm-graphify · tuzaklar
 ├── scripts/
-│   ├── kf.py                     # CLI: check init repair migrate hooks secret-scan graphify bundle sync end-phase selftest status
-│   └── faz_hafiza.py             # SessionStart hook
+│   ├── kf.py                     # CLI: check init repair migrate profile client plugins hooks secret-scan graphify bundle sync end-phase selftest status
+│   ├── faz_hafiza.py             # SessionStart hook
+│   └── ajans/                    # cloudflare_ops site_audit pagespeed_check gsc_query ga4_query youtube_fetch (_ortak)
 └── assets/
     ├── kod-fabrikasi.config.example.json
     ├── settings.example.json     # deny/ask kuralları + hook (birleştirilir)
-    ├── agents/                   # 8 ajan şablonu ({{PROJECT_NAME}} vb. doldurulur)
+    ├── agents/                   # 8 ajan şablonu + ajans/ 7 ajans ajanı ({{PROJECT_NAME}} vb. doldurulur)
     └── templates/                # ROADMAP PROGRESS DECISIONS OPEN_QUESTIONS FAZ_PROMPT MEMORY QA_REPORTS KNOWN_BUGS
                                   # NOTEBOOKLM_SUMMARY GRAPHIFY_NOTES PHASE_TEMPLATE CLAUDE_SECTION graphifyignore graphifyrc
+                                  # ajans/: README brand-guide personas copywriting-frameworks ad-policies credentials-README env.example CLAUDE_SECTION_AJANS
 ```
 
 Projede oluşan yapı:
@@ -117,7 +146,7 @@ python ~/.claude/skills/kod-fabrikasi/scripts/kf.py migrate --dry-run   # v1/v2 
 
 ## 📦 Ön gereksinimler
 
-git · Python 3.10+ · (önerilir) graphify: `uv tool install "graphifyy[sql]" --python 3.13` · (NotebookLM etkinse) `pip install "notebooklm-py[browser]"`, `playwright install chromium`, `notebooklm login`; hangi Python'a kurulduysa config `python_bin` o olmalı.
+git · Python 3.10+ · (önerilir) graphify: `uv tool install "graphifyy[sql]" --python 3.13` · (NotebookLM etkinse) `pip install "notebooklm-py[browser]"`, `playwright install chromium`, `notebooklm login`; hangi Python'a kurulduysa config `python_bin` o olmalı. Ajans profili: `pip install certifi` (Windows TLS kökleri), GSC/GA4 için `google-auth google-api-python-client google-analytics-data`, YouTube transkripti için `youtube-transcript-api`; Cloudflare/PageSpeed/site denetimi stdlib ile çalışır.
 
 ---
 
@@ -132,12 +161,15 @@ git · Python 3.10+ · (önerilir) graphify: `uv tool install "graphifyy[sql]" -
 | `graphify: command not found` | `uv tool update-shell`, terminali yeniden aç; ya da config `graphify_bin` tam yol. |
 | `init` "config zaten var" (exit 2) | `repair` (eksikler), `migrate` (v1/v2), `init --force`. |
 | Drive klasörü yok uyarısı | Paket `.claude/bundle-out/` altına yazıldı; Drive masaüstü çalışıyor mu? |
+| `CERTIFICATE_VERIFY_FAILED` (site_audit / pagespeed) | Windows OpenSSL deposunda kök eksik: `pip install certifi` (betikler otomatik kullanır). |
+| `CLOUDFLARE_API_TOKEN tanimli degil` | `.credentials/env.example` → `.env`; token izinleri [references/cloudflare.md](references/cloudflare.md). |
+| Cloudflare purge komutu sorulmadan çalıştı | `/permissions` ile `Bash(*cloudflare_ops.py purge*)` kuralı geçerli mi; sürüm ortada `*` desteklemiyorsa tam yol önekiyle yaz. |
 
 ---
 
 ## 📚 Rehberler
 
-[SKILL.md](SKILL.md) · [references/workflow.md](references/workflow.md) · [references/ajanlar.md](references/ajanlar.md) · [references/hafiza.md](references/hafiza.md) · [references/kurulum-rehberi.md](references/kurulum-rehberi.md) · [references/faz-raporu-sablonu.md](references/faz-raporu-sablonu.md) · [references/notebooklm-graphify.md](references/notebooklm-graphify.md) · [references/tuzaklar.md](references/tuzaklar.md)
+[SKILL.md](SKILL.md) · [references/workflow.md](references/workflow.md) · [references/ajanlar.md](references/ajanlar.md) · [references/hafiza.md](references/hafiza.md) · [references/kurulum-rehberi.md](references/kurulum-rehberi.md) · [references/faz-raporu-sablonu.md](references/faz-raporu-sablonu.md) · [references/notebooklm-graphify.md](references/notebooklm-graphify.md) · [references/tuzaklar.md](references/tuzaklar.md) · [references/ajans.md](references/ajans.md) · [references/cloudflare.md](references/cloudflare.md) · [references/plugins.md](references/plugins.md) · [references/yol-haritasi.md](references/yol-haritasi.md)
 
 ## 📄 Lisans ve katkı
 

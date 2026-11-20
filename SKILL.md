@@ -1,6 +1,6 @@
 ---
 name: kod-fabrikasi
-description: AI destekli yazılım fabrikası (v3) — ana oturum orkestratör, alt ajan ekibi (kesifci, gelistirici, tester, reviewer, faz-arsivcisi + isteğe bağlı mimar, guvenlik-inceleyici, alan uzmanları), oturumlar arası faz hafızası (PROGRESS/DECISIONS/OPEN_QUESTIONS + SessionStart hook), graphify kod haritası, izin kuralları ve isteğe bağlı Drive/NotebookLM/Obsidian senkronu. KULLANICI faz başlatmak/bitirmek, "sıradaki faz", "nerede kalmıştık", alt ajan kurulumu, kod fabrikası kurulumu/migrasyonu, bundle, NotebookLM senkronu, graphify, git hook, roadmap/ADR/faz raporu güncelleme istediğinde MUTLAKA bu skill'i kullan. "FAZ_PROMPT", "faz raporu", "ADR", "açık soru", "kod fabrikası kur", "v2'den v3'e geçir", "selftest" gibi ifadelerde — açıkça "skill" demese bile — devreye gir.
+description: AI destekli yazılım fabrikası (v3.1) — ana oturum orkestratör, alt ajan ekibi (kesifci, gelistirici, tester, reviewer, faz-arsivcisi + isteğe bağlı mimar, guvenlik-inceleyici, alan uzmanları), oturumlar arası faz hafızası (PROGRESS/DECISIONS/OPEN_QUESTIONS + SessionStart hook), graphify kod haritası, izin kuralları, isteğe bağlı Drive/NotebookLM/Obsidian senkronu ve DİJİTAL AJANS profili (metin-yazari, marka-denetcisi, seo-teknisyeni, rakip-analisti, site-denetcisi, cloudflare-operatoru; müşteri izolasyonu; GSC/GA4/PageSpeed/Cloudflare/YouTube API betikleri). KULLANICI faz başlatmak/bitirmek, "sıradaki faz", "nerede kalmıştık", alt ajan kurulumu, kod fabrikası kurulumu/migrasyonu, bundle, NotebookLM senkronu, graphify, git hook, roadmap/ADR/faz raporu güncelleme; ajans tarafında "dijital ajans kur", "müşteri ekle", "reklam metni yaz", "marka denetimi", "SEO raporu", "trafik neden düştü", "rakip analizi", "siteyi kontrol et / teslim öncesi denetim", "cache temizle", "yönlendirme ekle", "Cloudflare", "YouTube rakip araştırması" istediğinde MUTLAKA bu skill'i kullan. "FAZ_PROMPT", "faz raporu", "ADR", "açık soru", "kod fabrikası kur", "v2'den v3'e geçir", "selftest" gibi ifadelerde — açıkça "skill" demese bile — devreye gir.
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write, Agent, AskUserQuestion
 ---
 
@@ -10,7 +10,7 @@ allowed-tools: Read, Glob, Grep, Bash, Edit, Write, Agent, AskUserQuestion
 
 **Akış:** bağlam → plan → **ONAY** → `gelistirici` (paralel, ≤3) → `tester` → `reviewer` → `faz-arsivcisi` → commit (yalnızca kullanıcı isterse).
 
-Tek komut arayüzü: `python .claude/scripts/kf.py <komut>` (Windows/macOS/Linux; `make` ve bash gerekmez).
+Tek komut arayüzü: `python .claude/scripts/kf.py <komut>` (Windows/macOS/Linux; `make` ve bash gerekmez). İki profil: `yazilim` (varsayılan) ve `ajans` (çekirdek + dijital ajans katmanı; bkz. [🏢 Dijital ajans](#-dijital-ajans-profili)).
 
 ---
 
@@ -24,7 +24,9 @@ python .claude/scripts/kf.py check 2>/dev/null || python ~/.claude/skills/kod-fa
 | --- | --- |
 | `v3` | Hazır. Kullanıcının isteğine göre faz akışına geç. `SESSION HK: yok` ise `repair`. |
 | `v2` / `v1` / `v1-config-yok` | Kullanıcıya sor: "v3'e geçireyim mi? (dosyalar `git mv` ile taşınır, eski `bundle.py`/`Makefile` kaldırılır, ajanlar ve hook eklenir)". Onayla: `kf.py migrate --dry-run` göster → `kf.py migrate --remove-legacy` → `kf.py hooks` → `kf.py selftest`. |
-| `yok` | Kurulu değil. Kullanıcıya sor: "Bu projeye Kod Fabrikası kurayım mı?" Onaylarsa [references/kurulum-rehberi.md](references/kurulum-rehberi.md): tek toplu `AskUserQuestion`, sonra `kf.py init ...` (etkileşimsiz). |
+| `yok` | Kurulu değil. Kullanıcıya sor: "Bu projeye Kod Fabrikası kurayım mı?" Onaylarsa [references/kurulum-rehberi.md](references/kurulum-rehberi.md): tek toplu `AskUserQuestion` (profil sorusu dahil), sonra `kf.py init ...` (etkileşimsiz). |
+| `PROFIL: yazilim` + ajans isteği | Kullanıcı ajans işi istiyor (müşteri, reklam metni, SEO raporu, site denetimi, Cloudflare): "Ajans katmanını ekleyeyim mi?" → `kf.py profile ajans [--client slug:Ad:domain]` → `repair` → `selftest`. |
+| `PLUGIN: kurulu-bekleyen N` | Kurulu Anthropic plugin'i var ama ajanlara işlenmemiş: "Güçlendirme olarak uygulayayım mı?" → `kf.py plugins --apply`. `onerilen-eksik` için kurulumda bir kez sor (bkz. [references/plugins.md](references/plugins.md)); kullanıcı istemezse varsayılan ajanlarla devam, bir daha sorma. |
 
 `SKILL DIR: bulunamadi` ise `init/migrate/repair` için skill kopyasının yolunu kullan: `python ~/.claude/skills/kod-fabrikasi/scripts/kf.py ...`.
 
@@ -44,6 +46,27 @@ python .claude/scripts/kf.py check 2>/dev/null || python ~/.claude/skills/kod-fa
 | Dış API / alan sorusu | `<alan>-uzmani` (sonnet, isteğe bağlı) | ❌ |
 
 Orkestratör kuralları, brif şablonu ve "Verimli çalış" bloğu: [references/ajanlar.md](references/ajanlar.md). Küçük işler (birkaç dosya okuma, tek düzenleme) ajansız yapılır.
+
+---
+
+## 🏢 Dijital ajans profili
+
+`init --profile ajans` / `profile ajans`: çekirdek ekip kalır, şu katman eklenir. Müşteriler `clients/<slug>/` altında **izole** (brifte `MÜŞTERİ: <slug>` + `DOKUNMA: clients/<diğer>/**`); kimlikler `.credentials/.env` (Claude okuyamaz, betikler okur); araçlar `python .claude/scripts/ajans/<betik>.py --client <slug> [--out dosya]`.
+
+| Durum | Ajan | Yazar mı | Kapı |
+| --- | --- | --- | --- |
+| Reklam / sosyal / e-posta / blog / video metni (onaylı brif) | `metin-yazari` (sonnet) | yalnızca `clients/<slug>/campaigns|content` | → `marka-denetcisi` |
+| Her metin tesliminden önce ton + yasaklı kelime + politika + iddia + sızıntı | `marka-denetcisi` (sonnet high) | ❌ | ONAY olmadan teslim YOK |
+| GSC / GA4 / PageSpeed verisi, "trafik neden düştü", aylık SEO raporu | `seo-teknisyeni` (sonnet) | ❌ (betik `--out`) | — |
+| Rakip hiyerarşi / schema / içerik boşluğu; YouTube transkript → NotebookLM | `rakip-analisti` (sonnet) | ❌ | — |
+| Yaptığımız siteyi test et: teslim öncesi / yayın sonrası / periyodik | `site-denetcisi` (sonnet) | ❌ | "yayına hazır" yalnızca raporla |
+| Cache purge, 301, DNS, SSL/WAF ayarı, trafik, saldırı | `cloudflare-operatoru` (sonnet) | dosya ❌ / API `--yes` | PLAN → kullanıcı onayı → `--yes` (`ask`) |
+| Kampanya planı, bütçe, kanal, UTM, test planı (isteğe bağlı) | `reklam-stratejisti` (sonnet) | ❌ | — |
+| Landing page / tema / GTM kodu | çekirdek `gelistirici` → `tester` → `site-denetcisi` | ✅ | — |
+
+Betikler (stdlib; Google için `pip install google-auth google-api-python-client google-analytics-data`, YouTube için `youtube-transcript-api`, Windows TLS için `certifi`): `cloudflare_ops.py` (check · dns · ssl · analytics · security-events · firewall · redirect · purge · setting · dev-mode · under-attack · pages) · `site_audit.py` (teknik SEO + güvenlik başlıkları + kırık link + robots/sitemap/404; `--competitor`) · `pagespeed_check.py` (CWV lab + CrUX) · `gsc_query.py` (summary · drops · ctr-gap · pages · queries · inspect) · `ga4_query.py` (summary · channels · pages · landing · conversions) · `youtube_fetch.py` (transkript + yorum + arama/kanal).
+
+Akışlar (kreatif, SEO raporu, site denetimi, rakip, YouTube/NotebookLM, Cloudflare): [references/ajans.md](references/ajans.md). Cloudflare token izinleri, komut matrisi, `check` yorumu, senaryolar: [references/cloudflare.md](references/cloudflare.md).
 
 ---
 
@@ -99,8 +122,10 @@ Config'i her zaman önce oku: `test_commands`, `live_write_commands` (ajanlar ç
 | Komut | Ne yapar |
 | --- | --- |
 | `check` / `status` | Kurulum durumu / faz hafızası çıktısı |
-| `init --framework X --test-cmd ... --live-cmd ... --risk ... [--agents mimar,guvenlik-inceleyici] [--expert ad:Alan:yol] [--drive P] [--notebook ID] [--obsidian P]` | Etkileşimsiz kurulum (skill kopyasından) |
+| `init --framework X --test-cmd ... --live-cmd ... --risk ... [--agents mimar,guvenlik-inceleyici] [--expert ad:Alan:yol] [--drive P] [--notebook ID] [--obsidian P] [--profile ajans --client slug:Ad:domain --agency-agents reklam-stratejisti]` | Etkileşimsiz kurulum (skill kopyasından) |
 | `repair` / `migrate [--dry-run] [--remove-legacy]` | Eksikleri tamamla / v1-v2 → v3 |
+| `profile ajans|yazilim [--client ...]` · `client list|add --slug --name --domain [--zone] [--gsc] [--ga4] [--url]|remove --slug` | Mevcut projeye ajans katmanı / müşteri yönetimi (klasör + config + CLAUDE.md) |
+| `plugins` · `plugins --apply [--only a,b]` · `plugins --remove` | Önerilen Anthropic plugin'leri (profil + framework'e göre) listele; kuruluları ajan dosyalarına "Güçlendirmeler" bloğu + `Skill` aracı olarak işle / geri al |
 | `hooks` | pre-commit (gizli bilgi taraması) + post-commit (end-phase). `graphify hook install` KULLANMA. |
 | `secret-scan [--staged]` · `graphify` · `bundle [--dry-run]` · `sync` · `end-phase` | Tekil adımlar |
 | `selftest` | PASS/FAIL/WARN; FAIL varsa exit 1. Kurulum "bitti" demeden önce yeşil olmalı. |
@@ -121,6 +146,8 @@ Config'i her zaman önce oku: `test_commands`, `live_write_commands` (ajanlar ç
 10. Kök dizine yönetim `.md` dosyası ya da betik bırakma; `CLAUDE.md` 200 satırı aşırsa `.claude/rules/` kullan.
 11. Ana oturumun `model`/`effortLevel` ayarını projeye yazma (kullanıcının varsayılanı değişir); yalnızca ajan dosyalarında model belirt.
 12. Ajan raporunu doğrulamadan kullanıcıya aktarma; "Agent type not found" görünce ajanı yeniden yaratma (hot reload birkaç saniye; olmazsa yeni oturum).
+13. (Ajans) Brifte müşteri slug'ı olmadan ajan çalıştırma; iki müşteriyi tek brife koyma; `marka-denetcisi` ONAY'ı olmadan metin teslim etme; `site-denetcisi` raporu olmadan "yayına hazır" deme.
+14. (Ajans) `cloudflare_ops.py` yazma komutunu PLAN göstermeden `--yes` ile çalıştırma; `purge-all` ve `dns delete`'i kullanıcı açıkça istemeden önerme; `.credentials/` okuma, token'ı çıktıya/dokümana yazma; müşteri verisini proje NotebookLM'ine yükleme (müşteri başına notebook).
 
 ---
 
@@ -135,12 +162,16 @@ Config'i her zaman önce oku: `test_commands`, `live_write_commands` (ajanlar ç
 | [references/faz-raporu-sablonu.md](references/faz-raporu-sablonu.md) | `faz-arsivcisi`'ne faz raporu brifi verirken |
 | [references/notebooklm-graphify.md](references/notebooklm-graphify.md) | `graphify query`, `notebooklm ask`, etki analizi |
 | [references/tuzaklar.md](references/tuzaklar.md) | `kf.py`'ye dokunurken, "iyileştireyim" derken |
+| [references/ajans.md](references/ajans.md) | Ajans profili: kreatif / SEO / site denetimi / rakip / YouTube akışları, brif şablonu, müşteri klasörü |
+| [references/cloudflare.md](references/cloudflare.md) | Cloudflare token izinleri, komut matrisi (ask/deny), `check` yorumu, senaryolar, hata kodları |
+| [references/plugins.md](references/plugins.md) | Plugin kataloğu (hangi ajan hangi skill'i ne zaman), kurulum sorusu, `--apply` mekanizması, token/çakışma uyarıları |
+| [references/yol-haritasi.md](references/yol-haritasi.md) | Skill'in gelecek planı: finans katmanı (3.2), `finans` profili (3.3), plugin ölçümü, diğer fikirler |
 
 ---
 
 ## 🗣️ Sürüm ve güncelleme
 
-GitHub: https://github.com/mustafacaglarkara/claude-skill-kod-fabrikasi — **v3.0** (ajan ekibi + faz hafızası + `kf.py`). Sürüm geçmişi ve v2 → v3 geçişi: [CHANGELOG.md](CHANGELOG.md).
+GitHub: https://github.com/mustafacaglarkara/claude-skill-kod-fabrikasi — **v3.1** (ajan ekibi + faz hafızası + `kf.py` + dijital ajans profili). Sürüm geçmişi ve v2 → v3 geçişi: [CHANGELOG.md](CHANGELOG.md).
 
 ```bash
 git clone https://github.com/mustafacaglarkara/claude-skill-kod-fabrikasi.git ~/.claude/skills/kod-fabrikasi   # kurulum

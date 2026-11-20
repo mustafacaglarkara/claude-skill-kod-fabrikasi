@@ -1,6 +1,6 @@
 # Kritik Tuzaklar — Bunlara SAKIN Düşme
 
-Sistemin geçirdiği gerçek hatalardan damıtıldı. `kf.py`'yi "sadeleştireyim / iyileştireyim" derken bu hatalara **geri dönme**. Liste yalnızca büyür; tuzak silinmez.
+Sistemin geçirdiği gerçek hatalardan damıtıldı. `kf.py`'yi "sadeleştireyim / iyileştireyim" derken bu hatalara **geri dönme**. Liste yalnızca büyür; tuzak silinmez. (31 tuzak: NotebookLM/paketleme 1-11, ajanlar 12-21, süreç 22-25, ajans profili 27-31, bonus 26.)
 
 ## NotebookLM / paketleme (kf.py bundle)
 
@@ -88,6 +88,23 @@ Test ayarı dev DB'ye bakıyorsa `flutter test`/`pytest` veriyi uçurur (yaşand
 
 ### 25. Kök dizine yönetim dosyası / betik bırakma
 README dışında AI yönetim `.md`'si ve `bundle.py`/`Makefile` kökte durmaz; `migrate --remove-legacy` temizler. `CLAUDE.md` 200 satırı aşarsa `.claude/rules/`.
+
+## Ajans profili
+
+### 27. Brifte müşteri yok / iki müşteri var
+Ajan en yakın klasöre yazar ya da iki markanın tonunu karıştırır; bir müşterinin sloganı diğerinin reklamına girer. Her brif `MÜŞTERİ: <slug>` + `DOKUNMA: clients/<diğer>/**`; karşılaştırma iki ayrı salt okunur ajan. `marka-denetcisi` sızıntıyı ayrıca arar. NotebookLM: müşteri başına notebook, proje notebook'una müşteri verisi yüklenmez.
+
+### 28. "Küçük metin, denetime gerek yok"
+Tek kelimelik politika ihlali (öncesi-sonrası, "siz de mi ... hastasısınız", kanıtsız "%100") reklam hesabını kapatır; ajans ile müşteri arasındaki güven gider. `marka-denetcisi` kapısı metin boyutundan bağımsız; ONAY yoksa teslim yok.
+
+### 29. Cloudflare yazma komutunu PLAN'sız `--yes` ile çalıştırmak
+settings `ask` sorar ama kullanıcı ne olduğunu bilmeden "evet" der; `purge-all` origin'i yorar, yanlış `dns update` siteyi düşürür, `redirect add` döngü yapar. Betik `--yes`'siz yalnızca PLAN basar: önce PLAN raporlanır, kullanıcı onaylar, sonra `--yes`. `dns delete` Claude için DENY, zone silme hiç yok, `under-attack on` sonrası `off --restore` planı rapora yazılır. Her yazma `infra/cloudflare-log.md`'ye düşer; bu kaydı kaldırma.
+
+### 30. Kimlik dosyasını "yardımcı olmak için" okumak ya da çıktıya yazmak
+`.credentials/.env`, `service-account.json` deny'da; betikler kendisi okur, `mask()` ile token'ı hata mesajından siler. Ajan "token geçerli mi diye bakayım" diye `cat` etmez; selftest `.credentials/` içinde izlenen dosya olmadığını doğrular. Token'ı chat'e, rapora, Drive'a, NotebookLM'e yazma.
+
+### 31. Betik çıktısını ajana yapıştırmak / aynı betiği iki ajanın koşturması
+Ham GSC/GA4 çıktısı (binlerce satır) ajana yapıştırılırsa token ekonomisi biter; aynı PageSpeed sorgusu iki ajandan gidince kota (anahtarsız PSI günde çok düşük) tükenir. Ajan betiği `--out` ile çalıştırır, dosya yolu brifle diğer ajana geçer; ana oturum betik çıktısını okumaz, ajan raporunu okur. Windows'ta `CERTIFICATE_VERIFY_FAILED` → `pip install certifi`; TLS doğrulaması kapatılmaz.
 
 ## Bonus: 26. Mevcut kodu "iyileştireyim" diye yeniden yazma
 `kf.py` bu tuzaklardan geçerek olgunlaştı. Refactor istiyorsan: 1) bu listeyi oku, 2) yapısal değişikliği gerekçeli sun ve ONAY al, 3) sonra `kf.py selftest` + deneme projesinde `init`/`migrate`/`bundle --dry-run` + (NotebookLM etkinse) `notebooklm source list` ile çift kaynak yok mu kontrol et.

@@ -34,6 +34,10 @@ Kodun söyleyemediği şeyler; en fazla 4 soru, çok seçimli olabilir:
 3. **Yüksek riskli alanlar** (çoklu: auth/oturum, ödeme, kişisel veri, veritabanı/migration, altyapı/deploy, projeye özel) → `--risk`
 4. **Ekip ve entegrasyonlar** (çoklu): `mimar`, `guvenlik-inceleyici`, alan uzmanı (ad + alan + klasör), Drive klasörü, NotebookLM notebook id, Obsidian kasa yolu → `--agents`, `--expert`, `--drive`, `--notebook`, `--obsidian`
 
+Proje bir **dijital ajans çalışma alanıysa** (müşteri markaları, reklam metni, SEO raporu, site denetimi, Cloudflare yönetimi; keşifte `clients/`, `brand-guide`, GSC/GA4 izleri ya da kullanıcı ifadesi) soru 4'e ekle: "Ajans profili kurulsun mu? İlk müşteri(ler): slug, ad, domain [Cloudflare zone, GSC mülkü, GA4 property]; `reklam-stratejisti` isteniyor mu?" → `--profile ajans --client "slug:Ad:domain[:zone[:gsc[:ga4]]]" [--agency-agents reklam-stratejisti]`. Ajans için ek ön koşullar: `pip install certifi` (Windows TLS kökleri), Google verisi için `google-auth google-api-python-client google-analytics-data`, YouTube için `youtube-transcript-api`; kimlikler kurulumdan sonra `.credentials/env.example` → `.env` (insan doldurur; Claude okuyamaz). Ayrıntı: [ajans.md](ajans.md), [cloudflare.md](cloudflare.md).
+
+5. **Plugin güçlendirmeleri** (init'ten SONRA, `kf.py plugins` çıktısıyla; çoklu seçim, "hiçbiri" seçeneği ile): profil ve framework'e göre önerilen Anthropic plugin'leri listele (örn. `typescript-lsp`, `security-guidance`, `pr-review-toolkit`; ajansta `searchfit-seo`, `marketing`, `cloudflare`). Kullanıcı seçerse resmi olanları `claude plugin install <id>@claude-plugins-official` ile kur (marketplace yoksa önce `claude plugin marketplace add anthropics/claude-plugins-official`), senkron olanlar için claude.ai → Ayarlar → Plugin'ler yolunu söyle; sonra `kf.py plugins --apply`. Seçmezse varsayılan ajanlarla devam, bir daha sorma. Ayrıntı: [plugins.md](plugins.md).
+
 Dil (`--language tr|en`) ve commit kuralı ("commit/push yalnızca istenirse") varsayılan; kullanıcı aksini söylemediyse sorma. Ana oturum model/effort ayarı **sorulmaz, yazılmaz**.
 
 ## 3. Kurulum
@@ -49,6 +53,8 @@ python ~/.claude/skills/kod-fabrikasi/scripts/kf.py init \
 ```
 
 `init` ne yapar: `.claude/{context,decisions,archives,references,agents,hooks,scripts}`; config (`version: 3`); eksik planlama belgeleri şablondan (`{{PROJECT_NAME}}`, tarih, komutlar doldurulur); ajan dosyaları (core + seçilen isteğe bağlı + alan uzmanları); `kf.py` ve `faz_hafiza.py` kopyası; `settings.json` **birleştirme** (deny `.env`/pem/key, ask push/reset/canlı komutlar, SessionStart hook); `.gitignore`, `.gitattributes` (LF), `.graphifyignore`, `.graphifyrc`; `CLAUDE.md`'ye işaretli "Alt ajanlar ve proje hafızası" bölümü (varsa güncellenir). Config varsa `init` durur (exit 2): `repair`, `migrate` ya da `--force`.
+
+`--profile ajans` ek olarak: ajans ajanları (`assets/agents/ajans/`), `.claude/scripts/ajans/*.py`, `clients/<slug>/` (README, brand-guide, personas + alt klasörler), `shared/` (copywriting-frameworks, ad-policies), `.credentials/` (README + env.example; `.gitignore`'da), settings deny `.credentials/**` + `dns delete`, ask Cloudflare yazma + `wrangler deploy`, CLAUDE.md'ye ajans tablosu. Sonradan: `kf.py profile ajans`, `kf.py client add ...`.
 
 Sonra:
 ```bash
@@ -88,5 +94,6 @@ Taşınanlar (`git mv`): kök ya da `.claude/` altındaki ROADMAP/MEMORY/QA/KNOW
 - [ ] `kf.py init` çalıştı; `settings.json` birleştirildi (kullanıcının kuralları korundu)
 - [ ] `kf.py hooks` kuruldu; `graphify hook install` kullanılmadı
 - [ ] `kf.py selftest` FAIL vermiyor
+- [ ] `kf.py plugins` soruldu; seçilenler kuruldu ve `plugins --apply` çalıştı (ya da "hiçbiri")
 - [ ] `kf.py secret-scan` temiz; `.env`, db, döküm `git check-ignore` ile ignore'da
 - [ ] Kullanıcıya teslim raporu verildi; commit atılmadı
