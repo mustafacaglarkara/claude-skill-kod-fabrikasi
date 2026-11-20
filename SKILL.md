@@ -26,7 +26,7 @@ python .claude/scripts/kf.py check 2>/dev/null || python ~/.claude/skills/kod-fa
 | `v2` / `v1` / `v1-config-yok` | Kullanıcıya sor: "v3'e geçireyim mi? (dosyalar `git mv` ile taşınır, eski `bundle.py`/`Makefile` kaldırılır, ajanlar ve hook eklenir)". Onayla: `kf.py migrate --dry-run` göster → `kf.py migrate --remove-legacy` → `kf.py hooks` → `kf.py selftest`. |
 | `yok` | Kurulu değil. Kullanıcıya sor: "Bu projeye Kod Fabrikası kurayım mı?" Onaylarsa [references/kurulum-rehberi.md](references/kurulum-rehberi.md): tek toplu `AskUserQuestion` (profil sorusu dahil), sonra `kf.py init ...` (etkileşimsiz). |
 | `PROFIL: yazilim` + ajans isteği | Kullanıcı ajans işi istiyor (müşteri, reklam metni, SEO raporu, site denetimi, Cloudflare): "Ajans katmanını ekleyeyim mi?" → `kf.py profile ajans [--client slug:Ad:domain]` → `repair` → `selftest`. |
-| `PLUGIN: kurulu-bekleyen N` | Kurulu Anthropic plugin'i var ama ajanlara işlenmemiş: "Güçlendirme olarak uygulayayım mı?" → `kf.py plugins --apply`. `onerilen-eksik` için kurulumda bir kez sor (bkz. [references/plugins.md](references/plugins.md)); kullanıcı istemezse varsayılan ajanlarla devam, bir daha sorma. |
+| `PLUGIN: kurulu-bekleyen N` | Kurulu Anthropic plugin'i var ama ajanlara işlenmemiş: "Güçlendirme olarak uygulayayım mı?" → `kf.py plugins --apply`. `onerilen-eksik` için kurulumda bir kez `AskUserQuestion` (çoklu seçim + "hiçbiri"): kabul → `kf.py plugins --install --only a,b` (kurar + uygular); ret → varsayılan ajanlar, bir daha sorma. Bkz. [references/plugins.md](references/plugins.md). |
 
 `SKILL DIR: bulunamadi` ise `init/migrate/repair` için skill kopyasının yolunu kullan: `python ~/.claude/skills/kod-fabrikasi/scripts/kf.py ...`.
 
@@ -125,7 +125,7 @@ Config'i her zaman önce oku: `test_commands`, `live_write_commands` (ajanlar ç
 | `init --framework X --test-cmd ... --live-cmd ... --risk ... [--agents mimar,guvenlik-inceleyici] [--expert ad:Alan:yol] [--drive P] [--notebook ID] [--obsidian P] [--profile ajans --client slug:Ad:domain --agency-agents reklam-stratejisti]` | Etkileşimsiz kurulum (skill kopyasından) |
 | `repair` / `migrate [--dry-run] [--remove-legacy]` | Eksikleri tamamla / v1-v2 → v3 |
 | `profile ajans|yazilim [--client ...]` · `client list|add --slug --name --domain [--zone] [--gsc] [--ga4] [--url]|remove --slug` | Mevcut projeye ajans katmanı / müşteri yönetimi (klasör + config + CLAUDE.md) |
-| `plugins` · `plugins --apply [--only a,b]` · `plugins --remove` | Önerilen Anthropic plugin'leri (profil + framework'e göre) listele; kuruluları ajan dosyalarına "Güçlendirmeler" bloğu + `Skill` aracı olarak işle / geri al |
+| `plugins` · `plugins --install [--only a,b] [--scope user|project]` · `plugins --apply` · `plugins --remove` | Önerilen Anthropic plugin'leri (profil + framework'e göre) listele; seçilenleri `claude plugin install` ile kur ve ajan dosyalarına "Güçlendirmeler" bloğu + `Skill` aracı olarak işle / geri al |
 | `hooks` | pre-commit (gizli bilgi taraması) + post-commit (end-phase). `graphify hook install` KULLANMA. |
 | `secret-scan [--staged]` · `graphify` · `bundle [--dry-run]` · `sync` · `end-phase` | Tekil adımlar |
 | `selftest` | PASS/FAIL/WARN; FAIL varsa exit 1. Kurulum "bitti" demeden önce yeşil olmalı. |

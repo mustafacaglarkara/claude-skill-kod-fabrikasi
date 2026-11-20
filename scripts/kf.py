@@ -934,10 +934,49 @@ def plugin_relevant(entry, cfg):
     return True
 
 
+DIRECTORY = "anthropic-plugin-directory"   # claude.ai Plugin Dizini; Claude Code'da yerlesik marketplace
+
+
+def plugin_spec(entry):
+    return f"{entry['id']}@{OFFICIAL if entry['market'] == 'official' else DIRECTORY}"
+
+
 def plugin_install_hint(entry):
-    if entry["market"] == "official":
-        return f"claude plugin install {entry['id']}@{OFFICIAL}"
-    return "claude.ai -> Ayarlar -> Plugin'ler -> Dizin'den yukle (terminalde " + entry["id"] + "@synced olarak gorunur)"
+    return f"kf.py plugins --install --only {entry['id']}   (= claude plugin install {plugin_spec(entry)})"
+
+
+def install_plugins(entries, scope="user"):
+    """`claude plugin install` ile kurar; (kurulan, basarisiz) listeleri dondurur. Etkilesimsiz (-y --json)."""
+    exe = shutil.which("claude")
+    if not exe:
+        die("claude CLI PATH'te yok; plugin kurulamaz. Elle: claude plugin install <id>@<marketplace>")
+    r = run([exe, "plugin", "marketplace", "list"], timeout=60)
+    if OFFICIAL not in (r.stdout or ""):
+        log(f"marketplace ekleniyor: {OFFICIAL}")
+        run([exe, "plugin", "marketplace", "add", "anthropics/claude-plugins-official"], timeout=180)
+    ok, bad = [], []
+    for e in entries:
+        spec = plugin_spec(e)
+        log(f"kuruluyor: {spec} (scope {scope})")
+        r = run([exe, "plugin", "install", spec, "--scope", scope, "-y", "--json"], timeout=600)
+        out = (r.stdout or "").strip().splitlines()
+        res = {}
+        for line in reversed(out):
+            if line.startswith("{"):
+                try:
+                    res = json.loads(line)
+                except json.JSONDecodeError:
+                    pass
+                break
+        if r.returncode == 0 and not res.get("error"):
+            ok.append(e["id"])
+        else:
+            msg = res.get("error") or res.get("message") or (r.stderr or r.stdout or "").strip()[-300:]
+            bad.append((e["id"], msg))
+            log(f"KURULAMADI {spec}: {msg}")
+            if e["market"] == "synced":
+                log(f"  alternatif: claude.ai -> Ayarlar -> Plugin'ler -> Dizin'den '{e['id']}' yukle (terminalde {e['id']}@synced)")
+    return ok, bad
 
 
 def plugin_block_for_agent(agent, entries):
@@ -1010,6 +1049,21 @@ def cmd_plugins(args):
         save_config(root, cfg)
         log(f"guclendirme bloklari kaldirildi ({n} ajan dosyasi). settings.json ask kurallari elle kaldirilabilir (mcp__cloudflare...).")
         return 0
+
+    if args.install:
+        want = {s.strip() for s in args.only.split(",")} if args.only else {e["id"] for e in relevant}
+        targets = [e for e in relevant if e["id"] in want and e["id"] not in inst]
+        unknown = want - {e["id"] for e in relevant}
+        if unknown:
+            log(f"katalogda/profilde yok, atlandi: {', '.join(sorted(unknown))}")
+        if not targets:
+            log("kurulacak yeni plugin yok (hepsi kurulu ya da secim bos).")
+        else:
+            ok, bad = install_plugins(targets, scope=args.scope)
+            log(f"kuruldu: {', '.join(ok) or '-'}" + (f" | basarisiz: {', '.join(b for b, _ in bad)}" if bad else ""))
+            inst = installed_plugins()
+        args.apply = True
+        args.only = None   # kurulu olan tum ilgili plugin'ler uygulanir
 
     rows = []
     to_apply = []
@@ -1085,6 +1139,8 @@ def cmd_plugins(args):
     print(f"\n{len(rows)} oneri: {len(ready)} kurulu/uygulanmamis, {len([r for r in rows if r[2] == 'uygulanmis'])} uygulanmis, {len(missing)} yok.")
     if ready:
         print("Uygula: python .claude/scripts/kf.py plugins --apply   (ajan dosyalarina 'Guclendirmeler' blogu + Skill araci)")
+    if missing:
+        print(f"Kur + uygula: python .claude/scripts/kf.py plugins --install --only {','.join(r[0] for r in missing)}   (secimi kisalt)")
     print("Kaldir: python .claude/scripts/kf.py plugins --remove")
     return 0
 
@@ -1793,6 +1849,8 @@ def main(argv=None):
 
     p = sub.add_parser("plugins", help="onerilen Anthropic plugin'leri: listele | --apply (ajanlara entegre et) | --remove")
     p.add_argument("--apply", action="store_true", help="kurulu ve ilgili plugin'leri ajan dosyalarina isle")
+    p.add_argument("--install", action="store_true", help="eksik onerilen plugin'leri `claude plugin install` ile kur (--only ile sec), sonra --apply")
+    p.add_argument("--scope", choices=["user", "project", "local"], default="user", help="--install kapsami (varsayilan user)")
     p.add_argument("--only", help="yalnizca su plugin id'leri (virgulle)")
     p.add_argument("--remove", action="store_true", help="guclendirme bloklarini kaldir")
     p.set_defaults(fn=cmd_plugins)

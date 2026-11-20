@@ -32,10 +32,10 @@ Yerleşik (`/code-review`, `/security-review`, `/simplify`) her kurulumda vardı
 
 ## Kurulum akışı (Claude kurulumda sorar)
 
-1. `kf.py plugins` → öneri tablosu (profil + framework'e göre). Kullanıcıya tek soru: "Şunlar kurulsun mu? (çoklu seçim; hiçbiri = varsayılan ajanlarla devam)".
-2. Resmi olanlar: `claude plugin install <id>@claude-plugins-official` (kullanıcı onayladıysa Claude çalıştırır; marketplace kayıtlı değilse önce `claude plugin marketplace add anthropics/claude-plugins-official`). Senkron olanlar: kullanıcı claude.ai → Ayarlar → Plugin'ler'den yükler.
-3. `kf.py plugins --apply` → ajan blokları + `Skill` aracı + `FAZ_PROMPT.md` ana oturum bloğu + (cloudflare) settings ask. `kf.py selftest` uygulanan plugin'in hâlâ kurulu olduğunu kontrol eder (WARN).
-4. Yeni oturum ya da birkaç saniye bekleme (ajan dosyaları yeniden yüklenir).
+1. `kf.py plugins` → öneri tablosu (profil + framework'e göre). Kullanıcıya tek soru (`AskUserQuestion`, çoklu seçim): "Şu plugin'ler kurulsun mu? (hiçbiri = varsayılan ajanlarla devam)". Her seçenekte hangi ajana ne kattığı yazılır.
+2. Kabul → `kf.py plugins --install --only <seçilenler> [--scope user|project|local]`: betik `claude plugin install <id>@claude-plugins-official` (resmi) ya da `<id>@anthropic-plugin-directory` (claude.ai Dizini; Claude Code'da yerleşik marketplace) komutunu `-y --json` ile etkileşimsiz çalıştırır; resmi marketplace kayıtlı değilse ekler; kurulamayanı raporlar ve claude.ai → Ayarlar → Plugin'ler yolunu söyler; sonunda kurulu olan tüm ilgili plugin'leri `--apply` ile işler.
+3. `--apply` → ajan blokları + `Skill` aracı + `FAZ_PROMPT.md` ana oturum bloğu + (cloudflare) settings ask. `kf.py selftest` uygulanan plugin'in hâlâ kurulu olduğunu kontrol eder (WARN).
+4. Yeni oturum ya da birkaç saniye bekleme (ajan dosyaları yeniden yüklenir). Ret → bir daha sorulmaz; `kf.py plugins` her zaman elle çalıştırılabilir.
 
 ## Etkili olur mu? (değerlendirme)
 
