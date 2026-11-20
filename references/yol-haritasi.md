@@ -10,7 +10,10 @@ Skill'in kendi gelecek planı (projelerin ROADMAP'i değil). Her madde: neden, n
 | 3.1 | Dijital ajans profili + API betikleri + plugin güçlendirmeleri | ✅ 2026-11-20 |
 | 3.2 | Finans katmanı (B: ajans/şirket finans operasyonu) | 🟡 planlandı, karar bekliyor |
 | 3.3 | `finans` profili (A: finansal yazılım projeleri) | ⬜ fikir |
+| 3.4 | Depo / stok yönetimi katmanı (`depo` departmanı) | 🟡 planlandı |
 | — | Piyasa/yatırım analizi (C) | ⬜ düşük öncelik |
+
+Kurulumun ilk sorusu "hangi departmanlar için?" (`kf.py init --department ...`): `yazilim` ve `ajans` hazır; `muhasebe` ve `depo` seçilince config'e yazılır (`departments`), `check`/`selftest` "katman bekliyor" gösterir, katman yayımlanınca `kf.py repair` ekler. Yeni departman eklemek = `DEPARTMENTS` sözlüğüne giriş + profil/katman kodu + bu dosyada bölüm.
 
 ## P1 — 3.2: Finans katmanı (ajans/şirket finans operasyonu)
 
@@ -36,6 +39,19 @@ Gerekenler:
 - Tuzaklar: float para, çift gönderim, zaman dilimi/dönem sınırı, geri alınamaz migration, test verisinde gerçek kart/TCKN, loglanan PAN.
 - Settings: deny canlı ödeme/iade/transfer komutları ve prod bağlantı dizesi okuma; ask sandbox→canlı.
 - Faz raporu şablonuna "uyum kontrol listesi" bölümü.
+
+## P1 — 3.4: Depo / stok yönetimi katmanı (`depo` departmanı)
+
+Neden: ajans ve yazılım dışında kullanıcının işletme tarafı; stok, sipariş ve sayım verisi ERP/e-ticaret sistemlerinde duruyor, raporlama ve anomali tespiti tekrar eden iş.
+
+Gerekenler (taslak; karar bekliyor):
+- Ajanlar (salt okunur; stok hareketi yazmaz): `stok-analisti` (devir hızı, ölü stok, yeniden sipariş noktası, ABC analizi), `siparis-takipcisi` (geciken/eksik sipariş, tedarikçi performansı), `sayim-denetcisi` (sayım ↔ sistem farkı, fark nedenleri raporu). Yazan tek ajan: `rapor-yazari` (yalnızca `depo/reports/`).
+- Betikler (`.claude/scripts/depo/`): ERP/e-ticaret **okuma** API'si (Logo/Netsis/Mikro, Shopify/WooCommerce/Trendyol stok uçları; konfigürasyonla seçilir), barkod/SKU eşleme CSV, sayım dosyası ayrıştırıcı, yeniden sipariş hesaplayıcı (`--out`, `--json`).
+- Veri: `depo/` (stok politikası, tedarikçi listesi, sayım kayıtları); kişisel veri yok ama ticari sır: paket/NotebookLM dışında (`bundle.skip_prefixes`).
+- Güvenlik: stok düzeltme, sipariş oluşturma, fiyat değişikliği = DENY (betikte uygulanmaz); yalnızca rapor ve öneri. Dış sisteme yazan her şey insan onaylı, ERP arayüzünden.
+- Hafıza: haftalık stok raporu `faz-arsivcisi` ile; "ölü stok eşiği %X" gibi kararlar ADR.
+- Tuzaklar: birim dönüşümü (koli/adet), negatif stok, çoklu depo toplamı, tarih dilimi, SKU varyant karışıklığı.
+- Karar bekleyen: hangi ERP/e-ticaret, çoklu depo var mı, sayım sıklığı, kimin görebileceği.
 
 ## P2 — Piyasa / yatırım analizi (C)
 

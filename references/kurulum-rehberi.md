@@ -27,7 +27,14 @@ Skill kopyası: `git clone https://github.com/mustafacaglarkara/claude-skill-kod
 
 ## 2. Tek toplu soru (`AskUserQuestion`, öneri önce)
 
-Kodun söyleyemediği şeyler; en fazla 4 soru, çok seçimli olabilir:
+Kodun söyleyemediği şeyler; çok seçimli olabilir. **İlk soru her zaman departman sorusudur** (onay ve kurulumdan önce):
+
+0. **Bu kurulumu hangi departmanlar için yapıyorsunuz?** (çoklu seçim) → `--department` (tekrarlanabilir)
+   - `yazilim` — Yazılım geliştirme: çekirdek ekip, her kurulumda var (seçilmese de eklenir)
+   - `ajans` — Dijital ajans: müşteri izolasyonu, reklam metni + marka denetimi, SEO/GA4, site denetimi, Cloudflare (hazır; `profile: ajans` olur)
+   - `muhasebe` — Muhasebe / finans: fatura, tahsilat, nakit akışı, bütçe (**planlandı**, 3.2; seçim config'e yazılır, katman çıkınca `kf.py repair` ekler)
+   - `depo` — Depo / stok yönetimi: stok, sipariş, sayım, ERP okuma (**planlandı**, 3.4; aynı şekilde)
+   Seçime göre sonraki sorular daralır: `ajans` seçildiyse müşteri sorusu (soru 4 eki) sorulur; yalnızca `yazilim` ise sorulmaz. Planlanan departman seçildiyse kullanıcıya "şimdilik kayıt; katman gelince eklenecek" denir, kurulum durmaz.
 
 1. **Test ve derleme komutları** doğru mu? (keşiften önerilenler) → `--test-cmd`, `--build-cmd`
 2. **Canlıya yazan / onay isteyen komutlar** (keşiften adaylar + "yok") → `--live-cmd` (settings `ask` listesine girer, ajanlar çalıştırmaz)
@@ -44,6 +51,7 @@ Dil (`--language tr|en`) ve commit kuralı ("commit/push yalnızca istenirse") v
 
 ```bash
 python ~/.claude/skills/kod-fabrikasi/scripts/kf.py init \
+  --department yazilim --department ajans [--department muhasebe --department depo] \
   --framework node --test-cmd "npm test" --test-cmd "npm run lint" --build-cmd "npm run build" \
   --live-cmd "npm run deploy" --risk auth --risk payments \
   --agents mimar,guvenlik-inceleyici \
@@ -90,6 +98,7 @@ Taşınanlar (`git mv`): kök ya da `.claude/` altındaki ROADMAP/MEMORY/QA/KNOW
 ## Kontrol listesi
 
 - [ ] Keşif yapıldı; test DB ayrımı ve gizli dosyalar anlaşıldı
+- [ ] Departman sorusu ilk soruldu (`--department`); planlananlar kullanıcıya "kayıt, katman bekliyor" diye söylendi
 - [ ] Tek toplu soru soruldu, cevaplar `init` parametrelerine döküldü
 - [ ] `kf.py init` çalıştı; `settings.json` birleştirildi (kullanıcının kuralları korundu)
 - [ ] `kf.py hooks` kuruldu; `graphify hook install` kullanılmadı

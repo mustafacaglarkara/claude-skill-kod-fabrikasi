@@ -24,7 +24,7 @@ python .claude/scripts/kf.py check 2>/dev/null || python ~/.claude/skills/kod-fa
 | --- | --- |
 | `v3` | Hazır. Kullanıcının isteğine göre faz akışına geç. `SESSION HK: yok` ise `repair`. |
 | `v2` / `v1` / `v1-config-yok` | Kullanıcıya sor: "v3'e geçireyim mi? (dosyalar `git mv` ile taşınır, eski `bundle.py`/`Makefile` kaldırılır, ajanlar ve hook eklenir)". Onayla: `kf.py migrate --dry-run` göster → `kf.py migrate --remove-legacy` → `kf.py hooks` → `kf.py selftest`. |
-| `yok` | Kurulu değil. Kullanıcıya sor: "Bu projeye Kod Fabrikası kurayım mı?" Onaylarsa [references/kurulum-rehberi.md](references/kurulum-rehberi.md): tek toplu `AskUserQuestion` (profil sorusu dahil), sonra `kf.py init ...` (etkileşimsiz). |
+| `yok` | Kurulu değil. Kullanıcıya sor: "Bu projeye Kod Fabrikası kurayım mı?" Onaylarsa [references/kurulum-rehberi.md](references/kurulum-rehberi.md): **ilk soru departman** ("hangi departmanlar için? yazılım / dijital ajans / muhasebe (planlandı) / depo (planlandı)", çoklu seçim → `--department`), sonra tek toplu `AskUserQuestion`, sonra `kf.py init ...` (etkileşimsiz), sonra plugin sorusu. |
 | `PROFIL: yazilim` + ajans isteği | Kullanıcı ajans işi istiyor (müşteri, reklam metni, SEO raporu, site denetimi, Cloudflare): "Ajans katmanını ekleyeyim mi?" → `kf.py profile ajans [--client slug:Ad:domain]` → `repair` → `selftest`. |
 | `PLUGIN: kurulu-bekleyen N` | Kurulu Anthropic plugin'i var ama ajanlara işlenmemiş: "Güçlendirme olarak uygulayayım mı?" → `kf.py plugins --apply`. `onerilen-eksik` için kurulumda bir kez `AskUserQuestion` (çoklu seçim + "hiçbiri"): kabul → `kf.py plugins --install --only a,b` (kurar + uygular); ret → varsayılan ajanlar, bir daha sorma. Bkz. [references/plugins.md](references/plugins.md). |
 
@@ -122,7 +122,7 @@ Config'i her zaman önce oku: `test_commands`, `live_write_commands` (ajanlar ç
 | Komut | Ne yapar |
 | --- | --- |
 | `check` / `status` | Kurulum durumu / faz hafızası çıktısı |
-| `init --framework X --test-cmd ... --live-cmd ... --risk ... [--agents mimar,guvenlik-inceleyici] [--expert ad:Alan:yol] [--drive P] [--notebook ID] [--obsidian P] [--profile ajans --client slug:Ad:domain --agency-agents reklam-stratejisti]` | Etkileşimsiz kurulum (skill kopyasından) |
+| `init --department yazilim[,ajans,muhasebe,depo] --framework X --test-cmd ... --live-cmd ... --risk ... [--agents mimar,guvenlik-inceleyici] [--expert ad:Alan:yol] [--drive P] [--notebook ID] [--obsidian P] [--client slug:Ad:domain --agency-agents reklam-stratejisti]` | Etkileşimsiz kurulum (skill kopyasından); `ajans` departmanı ajans profilini açar, planlanan departmanlar config'e yazılır |
 | `repair` / `migrate [--dry-run] [--remove-legacy]` | Eksikleri tamamla / v1-v2 → v3 |
 | `profile ajans|yazilim [--client ...]` · `client list|add --slug --name --domain [--zone] [--gsc] [--ga4] [--url]|remove --slug` | Mevcut projeye ajans katmanı / müşteri yönetimi (klasör + config + CLAUDE.md) |
 | `plugins` · `plugins --install [--only a,b] [--scope user|project]` · `plugins --apply` · `plugins --remove` | Önerilen Anthropic plugin'leri (profil + framework'e göre) listele; seçilenleri `claude plugin install` ile kur ve ajan dosyalarına "Güçlendirmeler" bloğu + `Skill` aracı olarak işle / geri al |

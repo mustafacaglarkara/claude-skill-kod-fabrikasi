@@ -55,6 +55,25 @@ EDIT_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
 
 # Profil: "yazilim" (varsayilan) | "ajans" (dijital ajans katmani; cekirdek ekip korunur, asagidakiler eklenir)
 PROFILES = ("yazilim", "ajans")
+# Departmanlar: kurulumun ILK sorusu ("bu kurulum hangi departmanlar icin?"). Hazir olanlar profile donusur,
+# planlananlar config'e yazilir; katman yayimlaninca `kf.py repair` ekler. Sira = soru sirasi.
+DEPARTMENTS = {
+    "yazilim": {"label": "Yazilim gelistirme (cekirdek ekip; her kurulumda var)", "profile": "yazilim", "status": "hazir"},
+    "ajans": {"label": "Dijital ajans (musteri, reklam metni, SEO, site denetimi, Cloudflare)", "profile": "ajans", "status": "hazir"},
+    "muhasebe": {"label": "Muhasebe / finans (fatura, tahsilat, nakit akisi, butce)", "profile": None, "status": "planlandi (3.2; references/yol-haritasi.md)"},
+    "depo": {"label": "Depo / stok yonetimi (stok, siparis, sayim, ERP okuma)", "profile": None, "status": "planlandi (3.4; references/yol-haritasi.md)"},
+}
+
+
+def departments_of(cfg):
+    d = (cfg or {}).get("departments")
+    if d:
+        return [x for x in d if x in DEPARTMENTS]
+    return ["yazilim", "ajans"] if is_agency(cfg) else ["yazilim"]
+
+
+def profile_from_departments(deps):
+    return "ajans" if "ajans" in deps else "yazilim"
 AGENCY_AGENTS = ["metin-yazari", "marka-denetcisi", "seo-teknisyeni", "rakip-analisti", "site-denetcisi", "cloudflare-operatoru"]
 AGENCY_OPTIONAL_AGENTS = ["reklam-stratejisti"]
 AGENCY_READ_ONLY = {"marka-denetcisi", "seo-teknisyeni", "rakip-analisti", "site-denetcisi", "cloudflare-operatoru", "reklam-stratejisti"}
@@ -314,6 +333,8 @@ def cmd_check(args):
     print(f"PROJE      : {root}")
     print(f"YAPI       : {kind}")
     if cfg:
+        deps = departments_of(cfg)
+        print("DEPARTMAN  : " + ", ".join(d + ("" if DEPARTMENTS[d]["status"] == "hazir" else " (katman bekliyor)") for d in deps))
         print(f"PROFIL     : {profile_of(cfg)}" + (f" ({len(agency(cfg).get('clients', []))} musteri)" if is_agency(cfg) else ""))
     print(f"GIT        : {'var' if (root / '.git').exists() else 'YOK'}")
     agents = sorted(p.stem for p in (root / ".claude" / "agents").glob("*.md"))
@@ -353,12 +374,28 @@ def build_config(args, root):
         url = parts[3].strip() if len(parts) > 3 else ""
         experts.append({"name": name, "domain": domain, "paths": paths, "docs_url": url})
     optional = [a for a in (args.agents.split(",") if args.agents else []) if a in OPTIONAL_AGENTS]
-    profile = getattr(args, "profile", None) or "yazilim"
+    deps = []
+    for d in (getattr(args, "department", None) or []):
+        for x in d.split(","):
+            x = x.strip().lower()
+            if x and x not in DEPARTMENTS:
+                die(f"bilinmeyen departman: {x} (secenekler: {', '.join(DEPARTMENTS)})")
+            if x and x not in deps:
+                deps.append(x)
+    if "yazilim" not in deps:
+        deps.insert(0, "yazilim")
+    profile = getattr(args, "profile", None) or profile_from_departments(deps)
+    if profile == "ajans" and "ajans" not in deps:
+        deps.append("ajans")
+    for d in deps:
+        if DEPARTMENTS[d]["status"] != "hazir":
+            log(f"departman '{d}': katman henuz {DEPARTMENTS[d]['status']}; config'e kaydedildi, yayimlaninca `kf.py repair` ekler.")
     cfg = {
         "_comment": "Kod Fabrikasi v3. Bos/kapali entegrasyon atlanir. Paket yalnizca git'in izledigi dosyalardan olusur.",
         "version": VERSION,
         "project_name": args.name or root.name,
         "language": args.language,
+        "departments": deps,
         "profile": profile,
         "python_bin": args.python or sys.executable,
         "graphify_bin": args.graphify or "graphify",
@@ -749,6 +786,12 @@ def cmd_profile(args):
     if cfg.get("version") != VERSION:
         die(f"config v{cfg.get('version', 1)}. Once: kf.py migrate")
     cfg["profile"] = args.profile
+    deps = departments_of(cfg)
+    if args.profile == "ajans" and "ajans" not in deps:
+        deps.append("ajans")
+    if args.profile == "yazilim" and "ajans" in deps:
+        deps.remove("ajans")
+    cfg["departments"] = deps
     if args.profile == "ajans" and not cfg.get("agency"):
         cfg["agency"] = default_agency((args.agency_agents or "").split(","), [parse_client_spec(s) for s in (args.client or [])])
     elif args.profile == "ajans":
@@ -1732,6 +1775,10 @@ def cmd_selftest(args):
         rec("PASS" if r.returncode == 0 else "FAIL", "notebooklm-py python_bin'e kurulu")
     if integ(cfg, "drive"):
         rec("PASS" if Path(integ(cfg, "drive").get("folder_path", "")).is_dir() else "WARN", "Drive klasoru erisilebilir")
+    # departmanlar
+    for d in departments_of(cfg):
+        st = DEPARTMENTS[d]["status"]
+        rec("PASS" if st == "hazir" else "WARN", f"departman {d}: " + ("katman kurulu" if st == "hazir" else f"katman {st}"))
     # plugin guclendirmeleri
     pl = cfg.get("plugins") or {}
     if pl.get("applied"):
@@ -1819,7 +1866,8 @@ def main(argv=None):
     p.add_argument("--drive", help="Google Drive klasoru (bos = kapali)")
     p.add_argument("--notebook", help="NotebookLM notebook id (bos = kapali)")
     p.add_argument("--obsidian", help="Obsidian kasa yolu (bos = kapali)")
-    p.add_argument("--profile", choices=PROFILES, default="yazilim", help="yazilim (varsayilan) | ajans (dijital ajans katmani)")
+    p.add_argument("--department", action="append", help="kurulumun ilk sorusu: yazilim | ajans | muhasebe | depo (tekrarlanabilir ya da virgulle; hazir olanlar profile donusur)")
+    p.add_argument("--profile", choices=PROFILES, default=None, help="(eski) yazilim | ajans; verilmezse --department'tan turetilir")
     p.add_argument("--client", action="append", help="ajans: slug:Ad:domain[:zone[:gsc_site[:ga4]]] (tekrarlanabilir)")
     p.add_argument("--agency-agents", help="ajans istege bagli ajanlar, virgulle: reklam-stratejisti")
     p.add_argument("--force", action="store_true", help="config ve ajanlarin ustune yaz")

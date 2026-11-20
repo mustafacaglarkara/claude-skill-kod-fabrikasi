@@ -3,8 +3,10 @@
   "version": 3,
   "project_name": "<proje-adi>",
   "language": "tr",
+  "_departments_note": "Kurulumun ilk sorusu. yazilim (her zaman) | ajans (hazir -> profile ajans) | muhasebe (planlandi 3.2) | depo (planlandi 3.4). Planlananlar kayitta durur; katman yayimlaninca `kf.py repair` ekler.",
+  "departments": ["yazilim", "ajans"],
   "_profile_note": "yazilim (varsayilan) | ajans. ajans: cekirdek ekip + agency blogu (asagida). skill_dir: init'in kaydettigi skill kopyasi; proje kopyasindaki kf.py (client add, repair) sablonlari buradan bulur.",
-  "profile": "yazilim",
+  "profile": "ajans",
   "skill_dir": "C:\\Users\\<kullanici>\\.claude\\skills\\kod-fabrikasi",
 
   "python_bin": "C:\\Users\\<kullanici>\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
