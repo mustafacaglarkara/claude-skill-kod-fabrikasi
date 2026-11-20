@@ -37,7 +37,7 @@ clients/<slug>/
 ├── youtube-research/    # transkript + yorum (NotebookLM kaynağı)
 └── infra/cloudflare-log.md   # yazma işlemleri kaydı (betik ekler)
 shared/copywriting-frameworks.md · shared/ad-policies.md   # ortak kütüphane
-.credentials/.env · service-account.json                   # git dışı, Claude okuyamaz; betikler okur
+.env.dev (API anahtarları) · .credentials/service-account.json   # git dışı, Claude okuyamaz; betikler okur
 ```
 
 Config: `agency.clients[]` → `slug, name, domain, cloudflare_zone, gsc_site, ga4_property, pagespeed_urls`. Ekleme: `kf.py client add --slug x --name "X" --domain x.com [--zone] [--gsc sc-domain:x.com] [--ga4 123] [--url https://x.com/]`. Betikler `--client x` ile bu değerleri alır.

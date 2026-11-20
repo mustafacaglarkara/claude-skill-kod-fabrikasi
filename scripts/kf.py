@@ -128,8 +128,19 @@ LEGACY_LOCATIONS = {
 }
 GITIGNORE_LINES = [
     "graphify-out/", "__pycache__/", ".claude/settings.local.json", ".claude/bundle-out/",
-    "tum_kodlar.txt", ".obsidian/", ".env", ".env.*", "!.env.example",
+    "tum_kodlar.txt", ".obsidian/", ".env", ".env.*", "!.env.example", "!.env.dev.example",
 ]
+# Makineye ozel entegrasyon degerleri ve anahtarlar: config'te DEGIL, git disi .env.dev'de.
+# load_config .env.dev'i okur ve config'in ustune yazar; save_config bu degerleri geri soyar (config'e sizmaz).
+ENV_FILE = ".env.dev"
+ENV_MAP = {  # .env.dev anahtari -> (config yolu, etkinlestirdigi entegrasyon ya da None)
+    "KF_DRIVE_FOLDER": ("integrations.drive.folder_path", "drive"),
+    "KF_NOTEBOOKLM_ID": ("integrations.notebooklm.notebook_id", "notebooklm"),
+    "KF_OBSIDIAN_VAULT": ("integrations.obsidian.vault_path", "obsidian"),
+    "KF_PYTHON_BIN": ("python_bin", None),
+    "KF_GRAPHIFY_BIN": ("graphify_bin", None),
+}
+AGENCY_ENV_KEYS = ["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID", "PAGESPEED_API_KEY", "YOUTUBE_API_KEY", "GOOGLE_APPLICATION_CREDENTIALS"]
 DEFAULT_SECRET_NAME_PATTERNS = [
     r"\.env$", r"\.env\.", r"\.pem$", r"\.key$", r"\.p12$", r"secret", r"password", r"sifre",
     r"\.db$", r"\.sqlite", r"dump\.sql",
@@ -192,6 +203,72 @@ def config_path(root):
     return root / ".claude" / "kod-fabrikasi.config.json"
 
 
+def env_file(root):
+    return root / (os.environ.get("KF_ENV_FILE") or ENV_FILE)
+
+
+def read_env_file(path: Path):
+    """KEY=VALUE satirlari; yorum ve bos satir atlanir; tirnaklar soyulur. Degerler yazdirilmaz."""
+    vals = {}
+    if not path.exists():
+        return vals
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        vals[k.strip()] = v.strip().strip('"').strip("'")
+    return vals
+
+
+def write_env_file(path: Path, values, template_text=""):
+    """Dosya yoksa sablondan olusturur; verilen (bos olmayan) degerleri KEY= satirina yazar ya da sona ekler."""
+    text = path.read_text(encoding="utf-8") if path.exists() else template_text
+    for k, v in values.items():
+        if not v:
+            continue
+        if re.search(rf"^{re.escape(k)}=", text, re.M):
+            # lambda: Windows yollarindaki ters bolu (G:\Drive) re.sub kacis dizisi sanilmasin
+            text = re.sub(rf"^{re.escape(k)}=.*$", lambda m, k=k, v=v: f"{k}={v}", text, count=1, flags=re.M)
+        else:
+            text = text.rstrip("\n") + f"\n{k}={v}\n"
+    path.write_text(text if text.endswith("\n") else text + "\n", encoding="utf-8", newline="\n")
+
+
+def _get_path(d, dotted):
+    for k in dotted.split("."):
+        d = d.get(k) if isinstance(d, dict) else None
+        if d is None:
+            return None
+    return d
+
+
+def _set_path(d, dotted, value):
+    keys = dotted.split(".")
+    for k in keys[:-1]:
+        d = d.setdefault(k, {})
+    d[keys[-1]] = value
+
+
+def apply_env_overrides(cfg, root):
+    """Ortam > .env.dev > config. Degistirilen alanlarin orijinali `_env_orig`'e yazilir (save_config geri alir)."""
+    vals = read_env_file(env_file(root))
+    orig = {}
+    for key, (path, integ_name) in ENV_MAP.items():
+        v = (os.environ.get(key) or vals.get(key) or "").strip()
+        if not v:
+            continue
+        orig[path] = _get_path(cfg, path)
+        _set_path(cfg, path, v)
+        if integ_name:
+            en = f"integrations.{integ_name}.enabled"
+            orig[en] = _get_path(cfg, en)
+            _set_path(cfg, en, True)
+    if orig:
+        cfg["_env_orig"] = orig
+    return cfg
+
+
 def load_config(root, required=True):
     p = config_path(root)
     if not p.exists():
@@ -199,13 +276,17 @@ def load_config(root, required=True):
             die(f"config yok: {p}\n       once: python <skill>/scripts/kf.py init ...")
         return None
     with p.open(encoding="utf-8") as f:
-        return json.load(f)
+        return apply_env_overrides(json.load(f), root)
 
 
 def save_config(root, cfg):
+    import copy
+    c = copy.deepcopy(cfg)
+    for path, v in (c.pop("_env_orig", None) or {}).items():
+        _set_path(c, path, v)
     p = config_path(root)
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(cfg, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
+    p.write_text(json.dumps(c, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
 
 
 def phase_files(cfg):
@@ -347,8 +428,13 @@ def cmd_check(args):
     print(f"SESSION HK : {'var' if has_hook else 'yok'}")
     print(f"GRAPHIFY   : {'var' if shutil.which((cfg or {}).get('graphify_bin') or 'graphify') else 'bulunamadi'}")
     if cfg:
-        for name in ("drive", "notebooklm", "obsidian"):
-            print(f"{name.upper():<11}: {'etkin' if integ(cfg, name) else 'kapali'}")
+        ef = env_file(root)
+        print(f"ENV DOSYASI: {ef.name} {'var' if ef.exists() else 'YOK (' + ef.name + '.example -> ' + ef.name + ')'}")
+        orig = cfg.get("_env_orig") or {}
+        for name, key in (("drive", "KF_DRIVE_FOLDER"), ("notebooklm", "KF_NOTEBOOKLM_ID"), ("obsidian", "KF_OBSIDIAN_VAULT")):
+            i = integ(cfg, name)
+            src = f" ({ef.name})" if any(p.startswith(f"integrations.{name}.") for p in orig) else (" (config; .env.dev'e tasi: repair)" if i else "")
+            print(f"{name.upper():<11}: {'etkin' if i else 'kapali'}{src}")
     print(f"SKILL DIR  : {skill_dir() or 'bulunamadi (init/migrate icin gerekli)'}")
     if cfg:
         try:
@@ -411,15 +497,16 @@ def build_config(args, root):
             "max_parallel_editors": args.max_parallel,
         },
         "phase_files": dict(DEFAULT_PHASE_FILES),
+        "_integrations_note": "Makineye ozel degerler (Drive klasoru, NotebookLM id, Obsidian kasasi, Python yolu) config'te degil .env.dev'de: KF_DRIVE_FOLDER, KF_NOTEBOOKLM_ID, KF_OBSIDIAN_VAULT, KF_PYTHON_BIN, KF_GRAPHIFY_BIN. Dolu deger entegrasyonu acar; buradaki enabled yalnizca niyet.",
         "integrations": {
             "graphify": {"enabled": not args.no_graphify, "viz_node_limit": 15000},
-            "drive": {"enabled": bool(args.drive), "folder_path": args.drive or ""},
+            "drive": {"enabled": bool(args.drive), "folder_path": ""},
             "notebooklm": {
-                "enabled": bool(args.notebook), "notebook_id": args.notebook or "",
+                "enabled": bool(args.notebook), "notebook_id": "",
                 "allowed_extensions": [".md", ".txt", ".pdf"],
                 "ignore_dirs": ["cache", "__pycache__"], "max_file_size_mb": 50,
             },
-            "obsidian": {"enabled": bool(args.obsidian), "vault_path": args.obsidian or ""},
+            "obsidian": {"enabled": bool(args.obsidian), "vault_path": ""},
         },
         "bundle": {
             "allowed_extensions": [
@@ -572,14 +659,61 @@ def install_agency_workspace(root, cfg, sdir):
             log(f"ortak dosya: {d.relative_to(root).as_posix()}")
     cred = root / a.get("credentials_dir", ".credentials")
     cred.mkdir(parents=True, exist_ok=True)
-    for dst_name, tpl_name in (("README.md", "credentials-README.md"), ("env.example", "env.example")):
-        d = cred / dst_name
-        if not d.exists() and (tdir / tpl_name).exists():
-            d.write_text(render((tdir / tpl_name).read_text(encoding="utf-8"), ctx), encoding="utf-8", newline="\n")
-            log(f"kimlik klasoru: {d.relative_to(root).as_posix()}")
+    d = cred / "README.md"
+    if not d.exists() and (tdir / "credentials-README.md").exists():
+        d.write_text(render((tdir / "credentials-README.md").read_text(encoding="utf-8"), ctx), encoding="utf-8", newline="\n")
+        log(f"kimlik klasoru: {d.relative_to(root).as_posix()} (anahtarlar .env.dev'de; buraya yalnizca service-account.json)")
     for c in a.get("clients", []):
         install_client_dir(root, cfg, sdir, c)
     (root / a.get("clients_dir", "clients")).mkdir(parents=True, exist_ok=True)
+
+
+def env_template_text(cfg, sdir):
+    tdir = sdir / "assets" / "templates"
+    text = (tdir / "env.dev.example").read_text(encoding="utf-8") if (tdir / "env.dev.example").exists() else "# .env.dev\n"
+    if is_agency(cfg) and (tdir / "ajans" / "env.dev.ajans.example").exists():
+        text = text.rstrip("\n") + "\n\n" + (tdir / "ajans" / "env.dev.ajans.example").read_text(encoding="utf-8")
+    return render(text, template_ctx(cfg))
+
+
+def install_env_files(root, cfg, sdir, values=None):
+    """.env.dev.example (izlenir, sablon) + .env.dev (git disi; yoksa sablondan, verilen degerler yazilir)."""
+    tpl = env_template_text(cfg, sdir)
+    ex = root / (ENV_FILE + ".example")
+    if not ex.exists() or (is_agency(cfg) and "CLOUDFLARE_API_TOKEN" not in ex.read_text(encoding="utf-8", errors="replace")):
+        ex.write_text(tpl, encoding="utf-8", newline="\n")
+        log(f"{ex.name} yazildi (sablon; izlenir)")
+    ef = env_file(root)
+    existed = ef.exists()
+    text = ef.read_text(encoding="utf-8", errors="replace") if existed else ""
+    if existed and is_agency(cfg) and "CLOUDFLARE_API_TOKEN" not in text:
+        ajans = sdir / "assets" / "templates" / "ajans" / "env.dev.ajans.example"
+        if ajans.exists():
+            ef.write_text(text.rstrip("\n") + "\n\n" + ajans.read_text(encoding="utf-8"), encoding="utf-8", newline="\n")
+            log(f"{ef.name}: ajans anahtar satirlari eklendi")
+    write_env_file(ef, values or {}, tpl)
+    if not existed:
+        log(f"{ef.name} olusturuldu (git disi, Claude okuyamaz): Drive/NotebookLM/Obsidian degerleri ve anahtarlar buraya")
+    if is_tracked(root, ef.name):
+        log(f"UYARI: {ef.name} git tarafindan izleniyor! `git rm --cached {ef.name}` ile cikar.")
+
+
+def migrate_integrations_to_env(root, cfg):
+    """Eski config'teki dolu Drive/NotebookLM/Obsidian degerlerini .env.dev'e tasir, config'te bosaltir (bir kez)."""
+    moved = {}
+    for key, (path, _) in ENV_MAP.items():
+        orig = (cfg.get("_env_orig") or {}).get(path, _get_path(cfg, path))
+        if key in ("KF_PYTHON_BIN", "KF_GRAPHIFY_BIN"):
+            continue   # bunlar config'te kalabilir (varsayilan); istenirse .env.dev ezer
+        if orig and path not in (cfg.get("_env_orig") or {}):
+            moved[key] = orig
+    if moved:
+        write_env_file(env_file(root), moved)
+        for key in moved:
+            _set_path(cfg, ENV_MAP[key][0], "")
+        save_config(root, cfg)
+        apply_env_overrides(cfg, root)
+        log(f"config'teki entegrasyon degerleri .env.dev'e tasindi: {', '.join(moved)} (config'te bosaltildi; git'e girmez)")
 
 
 def install_templates(root, cfg, sdir):
@@ -695,7 +829,7 @@ def install_graphify_files(root, sdir):
             log(f"{dest} olusturuldu")
 
 
-def run_install(root, cfg, sdir, force_agents=False):
+def run_install(root, cfg, sdir, force_agents=False, env_values=None):
     for sub in ("context", "decisions", "archives", "references", "agents", "hooks", "scripts"):
         (root / ".claude" / sub).mkdir(parents=True, exist_ok=True)
     install_templates(root, cfg, sdir)
@@ -705,10 +839,11 @@ def run_install(root, cfg, sdir, force_agents=False):
     gi_lines = list(GITIGNORE_LINES)
     if is_agency(cfg):
         cred = agency(cfg).get("credentials_dir", ".credentials").strip("/")
-        # `{cred}/*` (klasor degil): git, haric tutulan klasorun icinden dosya geri alamaz; README ve env.example izlensin
-        gi_lines += [f"{cred}/*", f"!{cred}/README.md", f"!{cred}/env.example", "*service-account*.json"]
+        # `{cred}/*` (klasor degil): git, haric tutulan klasorun icinden dosya geri alamaz; README izlensin
+        gi_lines += [f"{cred}/*", f"!{cred}/README.md", "*service-account*.json"]
         install_agency_workspace(root, cfg, sdir)
     ensure_lines(root / ".gitignore", gi_lines, ".gitignore")
+    install_env_files(root, cfg, sdir, env_values)
     ga = root / ".gitattributes"
     if not ga.exists():
         ga.write_text("* text=auto eol=lf\n*.png binary\n*.jpg binary\n*.webp binary\n*.pdf binary\n*.ico binary\n", encoding="utf-8", newline="\n")
@@ -729,9 +864,10 @@ def print_next_steps(root, cfg):
     if integ(cfg, "graphify"):
         print(f"  - {cfg.get('graphify_bin', 'graphify')} update .   # ilk kod haritasi (sonra: graphify install --project istege bagli)")
     print("  - Ajanlar birkac saniye icinde yuklenir (hot reload). 'Agent type not found' gorursen yeni oturum ac.")
+    print(f"  - {ENV_FILE}: Drive klasoru / NotebookLM id / Obsidian kasasi (KF_*) buraya; git disi, Claude okuyamaz. Sablon: {ENV_FILE}.example")
     if is_agency(cfg):
         cred = agency(cfg).get("credentials_dir", ".credentials")
-        print(f"  - {cred}/env.example -> {cred}/.env (Cloudflare token, PageSpeed/YouTube key, service-account.json). Claude bu klasoru okuyamaz.")
+        print(f"  - {ENV_FILE}: CLOUDFLARE_API_TOKEN, PAGESPEED_API_KEY, YOUTUBE_API_KEY; {cred}/service-account.json (GSC/GA4).")
         print(f"  - Musteri ekle: {py} .claude/scripts/kf.py client add --slug musteri-a --name \"Musteri A\" --domain musteri-a.com")
         print(f"  - Site denetimi: {py} .claude/scripts/ajans/site_audit.py --client musteri-a --crawl 10 --links")
         print("  - pip install certifi google-auth google-api-python-client google-analytics-data youtube-transcript-api (gerektikce)")
@@ -752,8 +888,10 @@ def cmd_init(args):
     cfg = build_config(args, root)
     cfg["skill_dir"] = str(sdir)   # proje kopyasindaki kf.py (client add, repair) sablonlari buradan bulur
     save_config(root, cfg)
-    log(f"config yazildi: {config_path(root).relative_to(root).as_posix()}")
-    run_install(root, cfg, sdir, force_agents=args.force)
+    log(f"config yazildi: {config_path(root).relative_to(root).as_posix()} (Drive/NotebookLM/Obsidian degerleri .env.dev'e)")
+    env_values = {"KF_DRIVE_FOLDER": args.drive or "", "KF_NOTEBOOKLM_ID": args.notebook or "", "KF_OBSIDIAN_VAULT": args.obsidian or ""}
+    run_install(root, cfg, sdir, force_agents=args.force, env_values=env_values)
+    cfg = load_config(root)   # .env.dev degerleriyle (sonraki adimlar icin)
     log("kurulum tamam.")
     print_next_steps(root, cfg)
     return 0
@@ -771,6 +909,7 @@ def cmd_repair(args):
         cfg["skill_dir"] = str(sdir)
         save_config(root, cfg)
     run_install(root, cfg, sdir, force_agents=args.force_agents)
+    migrate_integrations_to_env(root, cfg)
     log("repair tamam.")
     return 0
 
@@ -1325,6 +1464,7 @@ def cmd_migrate(args):
         log(f"eski config yedegi: {backup.relative_to(root).as_posix()}")
     save_config(root, cfg)
     run_install(root, cfg, sdir)
+    migrate_integrations_to_env(root, cfg)   # eski config'teki Drive/NotebookLM/Obsidian degerleri -> .env.dev
     log(f"migrate tamam ({moved} dosya tasindi). Simdi: kf.py hooks  (eski post-commit kok bundle.py'yi cagiriyor) ve kf.py selftest")
     if integ(cfg, "drive"):
         log("Drive: v3 duzeni kod/ + belgeler/ + sync_dirs. Eski kok dosyalar ilk bundle'da stale_patterns ile temizlenir.")
@@ -1693,6 +1833,19 @@ def cmd_selftest(args):
         rec("PASS" if k in cfg else "FAIL", f"config alani: {k}")
     pyb = python_bin(cfg)
     rec("PASS" if Path(pyb).exists() or shutil.which(pyb) else "FAIL", f"python_bin bulunuyor: {pyb}")
+    # .env.dev
+    ef = env_file(root)
+    rec("PASS" if (root / (ENV_FILE + ".example")).exists() else "WARN", f"{ENV_FILE}.example (sablon) var")
+    rec("PASS" if ef.exists() else "WARN", f"{ef.name} var (Drive/NotebookLM/Obsidian degerleri ve anahtarlar)")
+    rec("PASS" if not is_tracked(root, ef.name) else "FAIL", f"{ef.name} git'te izlenmiyor")
+    orig = cfg.get("_env_orig") or {}
+    for name, key, path in (("drive", "KF_DRIVE_FOLDER", "integrations.drive.folder_path"), ("notebooklm", "KF_NOTEBOOKLM_ID", "integrations.notebooklm.notebook_id"),
+                            ("obsidian", "KF_OBSIDIAN_VAULT", "integrations.obsidian.vault_path")):
+        if integ(cfg, name):
+            val = _get_path(cfg, path)
+            rec("PASS" if val else "FAIL", f"{name}: deger var" + ("" if val else f" (BOS: {ef.name} icine {key}=... yaz)"))
+            if val and path not in orig:
+                rec("WARN", f"{name}: deger config'te duruyor (git'e girer); `kf.py repair` {ef.name}'e tasir")
     for key, rel in phase_files(cfg).items():
         if "*" in rel:
             continue
@@ -1798,7 +1951,7 @@ def cmd_selftest(args):
             rec("PASS" if (root / ".claude" / "scripts" / "ajans" / n).exists() else "FAIL", f"ajans betigi: .claude/scripts/ajans/{n}")
         rec("PASS" if (f"{cred}/*" in gl or f"{cred}/" in gl) else "FAIL", f".gitignore: {cred}/*")
         r = run(["git", "ls-files", cred], cwd=root)
-        tracked_cred = [f for f in r.stdout.splitlines() if f and not f.endswith(("README.md", "env.example"))]
+        tracked_cred = [f for f in r.stdout.splitlines() if f and not f.endswith("README.md")]
         rec("PASS" if not tracked_cred else "FAIL", f"{cred}/ icinde git'in izledigi sir yok" + (f": {', '.join(tracked_cred)}" if tracked_cred else ""))
         if sp.exists():
             try:
@@ -1817,8 +1970,11 @@ def cmd_selftest(args):
             rec("PASS" if (cd / "brand-guide.md").exists() else "FAIL", f"musteri {c['slug']}: brand-guide.md")
             rec("PASS" if c.get("domain") else "WARN", f"musteri {c['slug']}: domain")
         rec("PASS" if run([pyb, "-c", "import certifi"], timeout=60).returncode == 0 else "WARN", "certifi kurulu (TLS kok sertifikalari; pip install certifi)")
-        rec("PASS" if (root / cred / ".env").exists() else "WARN", f"{cred}/.env var (Cloudflare/Google anahtarlari)")
-        rec("PASS" if (root / cred / "service-account.json").exists() else "WARN", f"{cred}/service-account.json var (GSC/GA4)")
+        ev = read_env_file(env_file(root))
+        for key in ("CLOUDFLARE_API_TOKEN", "PAGESPEED_API_KEY"):
+            rec("PASS" if ev.get(key) else "WARN", f"{env_file(root).name}: {key} dolu")
+        sa = ev.get("GOOGLE_APPLICATION_CREDENTIALS") or str(root / cred / "service-account.json")
+        rec("PASS" if Path(sa).exists() or (root / sa).exists() else "WARN", "service-account.json var (GSC/GA4)")
     # gizli bilgi
     r = run([pyb, str(root / ".claude" / "scripts" / "kf.py"), "secret-scan"], cwd=root, timeout=120)
     rec("PASS" if r.returncode == 0 else "FAIL", "izlenen dosyalarda gizli bilgi taramasi temiz")

@@ -65,11 +65,12 @@
     "phase_reports_glob": ".claude/archives/PHASE_*.md"
   },
 
+  "_integrations_note": "Makineye ozel degerler ve sirlar config'te DEGIL, git disi .env.dev'de: KF_DRIVE_FOLDER, KF_NOTEBOOKLM_ID, KF_OBSIDIAN_VAULT, KF_PYTHON_BIN, KF_GRAPHIFY_BIN (+ ajans: CLOUDFLARE_API_TOKEN vb.). kf.py .env.dev'i okur, dolu deger entegrasyonu acar ve buradaki bos alani ezer; config'e geri yazmaz. Sablon: .env.dev.example",
   "integrations": {
     "graphify": { "enabled": true, "viz_node_limit": 15000 },
     "drive": {
       "enabled": false,
-      "folder_path": "G:\\Drive'im\\DEV_PROJELERI\\<proje-adi>"
+      "folder_path": ""
     },
     "notebooklm": {
       "enabled": false,
@@ -80,7 +81,7 @@
     },
     "obsidian": {
       "enabled": false,
-      "vault_path": "D:\\obsidian_kasalar\\<proje-adi>"
+      "vault_path": ""
     }
   },
 

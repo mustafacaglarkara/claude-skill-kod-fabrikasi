@@ -33,7 +33,8 @@ python .claude/scripts/kf.py bundle --dry-run
 ## PR sözleşmesi
 
 - **Yapı:** referanslar `references/`, betikler `scripts/` (`kf.py`, `faz_hafiza.py` ve ajans profili için `scripts/ajans/*.py`; yeni bash/Makefile ekleme), şablonlar `assets/agents/` (+ `assets/agents/ajans/`) ve `assets/templates/` (+ `assets/templates/ajans/`), örnekler `assets/`. Kökte README/LICENSE/CHANGELOG/CONTRIBUTING/SKILL dışında dosya yok.
-- **Ajans betikleri:** yalnızca stdlib (Google/YouTube kütüphaneleri tembel import + açık kurulum mesajı); kimlikler `_ortak.need()` ile `.credentials/.env`'den, hiçbir çıktıya yazılmaz (`mask()`); her yazma komutu `write_guard()` (PLAN → `--yes`) + `audit()`; TLS doğrulaması kapatılmaz; `--client`, `--json`, `--out` ortak parametreler. Test: `python scripts/ajans/site_audit.py https://www.python.org --crawl 3 --links`, token'sız `cloudflare_ops.py zones` açık hata vermeli.
+- **Config ve `.env.dev`:** makineye özel değer ve sır config'e yazılmaz; `ENV_MAP` üzerinden `.env.dev`'den okunur. Config'i kaydeden her yol `save_config` kullanır (`_env_orig` geri alma); doğrudan `json.dump` yasak.
+- **Ajans betikleri:** yalnızca stdlib (Google/YouTube kütüphaneleri tembel import + açık kurulum mesajı); kimlikler `_ortak.need()` ile `.env.dev`'den, hiçbir çıktıya yazılmaz (`mask()`); her yazma komutu `write_guard()` (PLAN → `--yes`) + `audit()`; TLS doğrulaması kapatılmaz; `--client`, `--json`, `--out` ortak parametreler. Test: `python scripts/ajans/site_audit.py https://www.python.org --crawl 3 --links`, token'sız `cloudflare_ops.py zones` açık hata vermeli.
 - **Etkileşimsizlik:** betikler soru sormaz (`input()`/`read` yok); her bilgi parametre ya da config.
 - **Platform:** Windows + macOS + Linux. Dosya yazarken `newline="\n"`, yollar `pathlib`, hook komutlarında tam `python_bin`.
 - **Güvenlik:** paket yalnızca `git ls-files`; `.env` okunmaz; NotebookLM güvenlik freni ve id bazlı silme değişmez.

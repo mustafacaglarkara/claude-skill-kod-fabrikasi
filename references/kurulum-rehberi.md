@@ -62,6 +62,8 @@ python ~/.claude/skills/kod-fabrikasi/scripts/kf.py init \
 
 `init` ne yapar: `.claude/{context,decisions,archives,references,agents,hooks,scripts}`; config (`version: 3`); eksik planlama belgeleri şablondan (`{{PROJECT_NAME}}`, tarih, komutlar doldurulur); ajan dosyaları (core + seçilen isteğe bağlı + alan uzmanları); `kf.py` ve `faz_hafiza.py` kopyası; `settings.json` **birleştirme** (deny `.env`/pem/key, ask push/reset/canlı komutlar, SessionStart hook); `.gitignore`, `.gitattributes` (LF), `.graphifyignore`, `.graphifyrc`; `CLAUDE.md`'ye işaretli "Alt ajanlar ve proje hafızası" bölümü (varsa güncellenir). Config varsa `init` durur (exit 2): `repair`, `migrate` ya da `--force`.
 
+`--drive`, `--notebook`, `--obsidian` değerleri config'e değil **`.env.dev`**'e yazılır (`KF_DRIVE_FOLDER`, `KF_NOTEBOOKLM_ID`, `KF_OBSIDIAN_VAULT`); config'te yalnızca `enabled` niyeti kalır. `init` her zaman `.env.dev.example` (izlenir) ve yoksa `.env.dev` (git dışı, deny) oluşturur; kullanıcı sonradan değer eklerse `kf.py check` "etkin (.env.dev)" gösterir. Eski projede config'teki değerleri `kf.py repair` bir kez `.env.dev`'e taşır.
+
 `--profile ajans` ek olarak: ajans ajanları (`assets/agents/ajans/`), `.claude/scripts/ajans/*.py`, `clients/<slug>/` (README, brand-guide, personas + alt klasörler), `shared/` (copywriting-frameworks, ad-policies), `.credentials/` (README + env.example; `.gitignore`'da), settings deny `.credentials/**` + `dns delete`, ask Cloudflare yazma + `wrangler deploy`, CLAUDE.md'ye ajans tablosu. Sonradan: `kf.py profile ajans`, `kf.py client add ...`.
 
 Sonra:

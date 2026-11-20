@@ -2,7 +2,7 @@
 """Cloudflare API v4 operasyon araci (Kod Fabrikasi ajans profili; yalnizca stdlib).
 
 Kimlik: CLOUDFLARE_API_TOKEN (zorunlu), CLOUDFLARE_ACCOUNT_ID (Pages icin; yoksa /accounts'tan ilk hesap).
-Degerler .credentials/.env'den ya da ortamdan okunur; hicbir zaman yazdirilmaz.
+Degerler proje kokundeki .env.dev'den (ya da ortamdan) okunur; hicbir zaman yazdirilmaz.
 
 OKUMA (serbest; settings.json'da sorulmaz):
   zones                                  hesaptaki zone'lar

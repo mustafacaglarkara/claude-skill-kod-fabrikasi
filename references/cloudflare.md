@@ -1,6 +1,6 @@
 # Cloudflare Entegrasyonu — Tam Değerlendirme ve Kullanım
 
-Araç: `.claude/scripts/ajans/cloudflare_ops.py` (yalnızca stdlib; Cloudflare API v4 + GraphQL Analytics). Ajan: `cloudflare-operatoru`. Kimlik: `.credentials/.env` → `CLOUDFLARE_API_TOKEN` (+ `CLOUDFLARE_ACCOUNT_ID` Pages için). Claude token'ı hiç görmez; betik okur, hiçbir çıktıya yazmaz.
+Araç: `.claude/scripts/ajans/cloudflare_ops.py` (yalnızca stdlib; Cloudflare API v4 + GraphQL Analytics). Ajan: `cloudflare-operatoru`. Kimlik: proje kökündeki `.env.dev` → `CLOUDFLARE_API_TOKEN` (+ `CLOUDFLARE_ACCOUNT_ID` Pages için). Claude token'ı hiç görmez; betik okur, hiçbir çıktıya yazmaz.
 
 ## Neden API (dashboard yerine)
 
@@ -27,7 +27,7 @@ Cloudflare dashboard → My Profile → API Tokens → Create Token → Custom. 
 | Account | Cloudflare Pages: Read | `pages list/deployments` |
 | Account | Account Settings: Read | hesap id çözümü |
 
-Zone Resources: **Include → Specific zone** ile yalnızca ajansın yönettiği zone'lar. Zone silme, kullanıcı/üyelik izni **verme**. Token'ı `.credentials/.env`'e yaz; `kf.py selftest` dosyanın git'te olmadığını doğrular.
+Zone Resources: **Include → Specific zone** ile yalnızca ajansın yönettiği zone'lar. Zone silme, kullanıcı/üyelik izni **verme**. Token'ı `.env.dev`'e yaz; `kf.py selftest` dosyanın git'te olmadığını ve anahtarın dolu olduğunu doğrular (değeri yazdırmaz).
 
 Doğrulama: `python .claude/scripts/ajans/cloudflare_ops.py zones` → listede müşteri zone'ları görünmeli.
 

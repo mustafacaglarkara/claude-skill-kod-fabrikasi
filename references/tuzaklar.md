@@ -1,6 +1,6 @@
 # Kritik Tuzaklar — Bunlara SAKIN Düşme
 
-Sistemin geçirdiği gerçek hatalardan damıtıldı. `kf.py`'yi "sadeleştireyim / iyileştireyim" derken bu hatalara **geri dönme**. Liste yalnızca büyür; tuzak silinmez. (31 tuzak: NotebookLM/paketleme 1-11, ajanlar 12-21, süreç 22-25, ajans profili 27-31, bonus 26.)
+Sistemin geçirdiği gerçek hatalardan damıtıldı. `kf.py`'yi "sadeleştireyim / iyileştireyim" derken bu hatalara **geri dönme**. Liste yalnızca büyür; tuzak silinmez. (32 tuzak: NotebookLM/paketleme 1-11, ajanlar 12-21, süreç 22-25, ajans profili 27-31, config/.env.dev 32, bonus 26.)
 
 ## NotebookLM / paketleme (kf.py bundle)
 
@@ -105,6 +105,9 @@ settings `ask` sorar ama kullanıcı ne olduğunu bilmeden "evet" der; `purge-al
 
 ### 31. Betik çıktısını ajana yapıştırmak / aynı betiği iki ajanın koşturması
 Ham GSC/GA4 çıktısı (binlerce satır) ajana yapıştırılırsa token ekonomisi biter; aynı PageSpeed sorgusu iki ajandan gidince kota (anahtarsız PSI günde çok düşük) tükenir. Ajan betiği `--out` ile çalıştırır, dosya yolu brifle diğer ajana geçer; ana oturum betik çıktısını okumaz, ajan raporunu okur. Windows'ta `CERTIFICATE_VERIFY_FAILED` → `pip install certifi`; TLS doğrulaması kapatılmaz.
+
+### 32. Entegrasyon değerini config'e yazmak
+`kod-fabrikasi.config.json` git'tedir; Drive klasör yolu, NotebookLM id, Obsidian kasası ve Python yolu makineye özeldir, notebook id ise paylaşılmaması gereken bir erişim anahtarı gibidir. Bunlar `.env.dev`'de durur; `load_config` üstüne yazar, `save_config` `_env_orig` ile geri soyar (config'e sızmaz). `client add` gibi config'i kaydeden her komut bu yoldan geçmek zorunda: `json.dump` ile doğrudan yazma. `.env.dev.example` izlenir, `.env.dev` asla (selftest FAIL).
 
 ## Bonus: 26. Mevcut kodu "iyileştireyim" diye yeniden yazma
 `kf.py` bu tuzaklardan geçerek olgunlaştı. Refactor istiyorsan: 1) bu listeyi oku, 2) yapısal değişikliği gerekçeli sun ve ONAY al, 3) sonra `kf.py selftest` + deneme projesinde `init`/`migrate`/`bundle --dry-run` + (NotebookLM etkinse) `notebooklm source list` ile çift kaynak yok mu kontrol et.

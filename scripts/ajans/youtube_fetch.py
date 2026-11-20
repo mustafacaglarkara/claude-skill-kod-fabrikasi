@@ -32,7 +32,7 @@ def video_id(s):
 def yt(path, **params):
     key = optional("YOUTUBE_API_KEY")
     if not key:
-        die("YOUTUBE_API_KEY yok (.credentials/.env)")
+        die("YOUTUBE_API_KEY yok (.env.dev)")
     params["key"] = key
     status, body = http("GET", f"{API}/{path}?" + urllib.parse.urlencode(params, doseq=True), timeout=40)
     if status != 200 or not isinstance(body, dict):

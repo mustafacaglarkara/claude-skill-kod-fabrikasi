@@ -100,7 +100,8 @@ Ayrıntı ve hata senaryoları: [references/workflow.md](references/workflow.md)
 <proje>/
 ├── CLAUDE.md                      # "Alt ajanlar ve proje hafızası" bölümü (kf.py ekler/günceller)
 ├── .claude/
-│   ├── kod-fabrikasi.config.json  # version:3 — TÜM proje-özel değerler
+│   ├── kod-fabrikasi.config.json  # version:3 — proje-özel ayarlar (makineye özel değerler ve sırlar DEĞİL)
+├── .env.dev                       # git dışı, Claude okuyamaz: KF_DRIVE_FOLDER, KF_NOTEBOOKLM_ID, KF_OBSIDIAN_VAULT, KF_PYTHON_BIN + ajans API anahtarları (şablon: .env.dev.example)
 │   ├── settings.json              # deny: .env/pem/key · ask: push/reset/canlı komutlar · SessionStart hook
 │   ├── agents/*.md                # ekip
 │   ├── hooks/faz_hafiza.py        # SessionStart: PROGRESS/OPEN/ADR/git → bağlam
@@ -113,7 +114,7 @@ Ayrıntı ve hata senaryoları: [references/workflow.md](references/workflow.md)
 └── .graphifyignore, .graphifyrc, .gitattributes
 ```
 
-Config'i her zaman önce oku: `test_commands`, `live_write_commands` (ajanlar çalıştırmaz), `high_risk_areas`, `agents`, `phase_files`, `integrations.{graphify,drive,notebooklm,obsidian}.enabled`. Şema: [assets/kod-fabrikasi.config.example.json](assets/kod-fabrikasi.config.example.json). Belge rolleri: [references/hafiza.md](references/hafiza.md).
+Config'i her zaman önce oku: `test_commands`, `live_write_commands` (ajanlar çalıştırmaz), `high_risk_areas`, `agents`, `phase_files`, `integrations.{graphify,drive,notebooklm,obsidian}.enabled`. Drive klasörü, NotebookLM id, Obsidian kasası ve API anahtarları **`.env.dev`'dedir** (git dışı; `kf.py` okur ve config'in üstüne yazar; sen okuyamazsın, değerini kullanıcıya sor ya da `kf.py check` ile "etkin/kapalı" durumuna bak). Şema: [assets/kod-fabrikasi.config.example.json](assets/kod-fabrikasi.config.example.json). Belge rolleri: [references/hafiza.md](references/hafiza.md).
 
 ---
 

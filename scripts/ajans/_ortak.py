@@ -1,7 +1,8 @@
 """Ajans betikleri icin ortak yardimcilar (yalnizca stdlib).
 
 Kurallar:
-  * Kimlik bilgileri .credentials/.env (KEY=VALUE) ya da ortam degiskeninden okunur; ASLA yazdirilmaz.
+  * Kimlik bilgileri proje kokundeki .env.dev (KEY=VALUE; KF_ENV_FILE ile degistirilebilir), eski .credentials/.env
+    ya da ortam degiskeninden okunur; ASLA yazdirilmaz.
   * HTTP: urllib + kisa yeniden deneme; hata mesajlarinda token maskelenir.
   * Cikti: --json ile ham JSON, --out ile dosyaya (md/json) yazim; varsayilan kisa Markdown.
   * Betikler proje kopyasinda <root>/.claude/scripts/ajans/ altinda durur; config'i oradan bulur.
@@ -93,27 +94,35 @@ def credentials_dir(cfg=None):
     return project_root() / (a.get("credentials_dir") or ".credentials")
 
 
+ENV_FILE = ".env.dev"
+
+
+def env_file():
+    return project_root() / (os.environ.get("KF_ENV_FILE") or ENV_FILE)
+
+
 def load_env():
-    """.credentials/.env dosyasini ortam degiskenlerine yukler (mevcut olanlari ezmez)."""
-    p = credentials_dir() / ".env"
-    if not p.exists():
-        return
-    for line in p.read_text(encoding="utf-8", errors="replace").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
+    """<root>/.env.dev (ya da KF_ENV_FILE) ve eski .credentials/.env dosyalarini ortam degiskenlerine yukler;
+    ortamda zaten olan degerleri ezmez. Degerler yazdirilmaz."""
+    for p in (env_file(), credentials_dir() / ".env"):
+        if not p.exists():
             continue
-        k, v = line.split("=", 1)
-        k = k.strip()
-        v = v.strip().strip('"').strip("'")
-        if k and k not in os.environ:
-            os.environ[k] = v
+        for line in p.read_text(encoding="utf-8", errors="replace").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            k = k.strip()
+            v = v.strip().strip('"').strip("'")
+            if k and v and k not in os.environ:
+                os.environ[k] = v
 
 
 def need(key, hint=""):
     load_env()
     v = os.environ.get(key, "").strip()
     if not v:
-        die(f"{key} tanimli degil. {hint or ''} (.credentials/.env icine yaz: {key}=...)".strip())
+        die(f"{key} tanimli degil. {hint or ''} ({env_file().name} icine yaz: {key}=...)".strip())
     return v
 
 

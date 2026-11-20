@@ -1,5 +1,5 @@
 
-**Dijital ajans profili.** Müşteriler `{{CLIENTS_DIR}}/<slug>/` altında izole; her brif TEK müşteri söyler, ajan başka müşterinin klasörünü açmaz. Üreten ajan kendi işini onaylamaz: metin → `marka-denetcisi` ONAY olmadan teslim edilmez; site → `site-denetcisi` raporu olmadan "yayına hazır" denmez. Araçlar `python .claude/scripts/ajans/<betik>.py --client <slug>`; kimlikler `{{CREDENTIALS_DIR}}/.env` (Claude okumaz, betik okur).
+**Dijital ajans profili.** Müşteriler `{{CLIENTS_DIR}}/<slug>/` altında izole; her brif TEK müşteri söyler, ajan başka müşterinin klasörünü açmaz. Üreten ajan kendi işini onaylamaz: metin → `marka-denetcisi` ONAY olmadan teslim edilmez; site → `site-denetcisi` raporu olmadan "yayına hazır" denmez. Araçlar `python .claude/scripts/ajans/<betik>.py --client <slug>`; kimlikler `.env.dev` ve `{{CREDENTIALS_DIR}}/service-account.json` (Claude okumaz, betik okur).
 
 | Durum | Ajan |
 | --- | --- |

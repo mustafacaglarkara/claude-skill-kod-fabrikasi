@@ -60,7 +60,7 @@ python ~/.claude/skills/kod-fabrikasi/scripts/kf.py init --framework node --test
   --profile ajans --client "musteri-a:Müşteri A:musteri-a.com" --agency-agents reklam-stratejisti
 # ya da mevcut v3 projede:  python .claude/scripts/kf.py profile ajans --client "musteri-a:Müşteri A:musteri-a.com"
 python .claude/scripts/kf.py client add --slug musteri-b --name "Müşteri B" --domain musteri-b.com --ga4 123456
-cp .credentials/env.example .credentials/.env   # Cloudflare token, PageSpeed/YouTube key; service-account.json (GSC/GA4) — Claude okuyamaz
+#  .env.dev: CLOUDFLARE_API_TOKEN, PAGESPEED_API_KEY, YOUTUBE_API_KEY (init oluşturur; şablon .env.dev.example); .credentials/service-account.json (GSC/GA4) — Claude okuyamaz
 python .claude/scripts/kf.py selftest
 ```
 
@@ -96,7 +96,7 @@ Müşteriler `clients/<slug>/` altında izole (brand-guide, personas, campaigns,
     ├── agents/                   # 8 ajan şablonu + ajans/ 7 ajans ajanı ({{PROJECT_NAME}} vb. doldurulur)
     └── templates/                # ROADMAP PROGRESS DECISIONS OPEN_QUESTIONS FAZ_PROMPT MEMORY QA_REPORTS KNOWN_BUGS
                                   # NOTEBOOKLM_SUMMARY GRAPHIFY_NOTES PHASE_TEMPLATE CLAUDE_SECTION graphifyignore graphifyrc
-                                  # ajans/: README brand-guide personas copywriting-frameworks ad-policies credentials-README env.example CLAUDE_SECTION_AJANS
+                                  # env.dev.example · ajans/: README brand-guide personas copywriting-frameworks ad-policies credentials-README env.dev.ajans.example CLAUDE_SECTION_AJANS
 ```
 
 Projede oluşan yapı:
@@ -123,6 +123,7 @@ Projede oluşan yapı:
 - Paket (`kf.py bundle`) **yalnızca `git ls-files`** dosyalarından oluşur; `.env`, veritabanı, döküm git dışında olduğu için hiç girmez.
 - Pre-commit hook staged dosyalarda gizli bilgi tarar (ad kalıpları + `.env` değerleri); eşleşmede commit durur.
 - `settings.json`: `.env`/pem/key okunamaz; `git push`, `reset --hard`, `stash`, canlıya yazan komutlar her seferinde sorar.
+- Makineye özel değerler ve sırlar (Drive klasörü, NotebookLM id, Obsidian kasası, Python yolu, Cloudflare/Google/YouTube anahtarları) config'te değil **`.env.dev`**'de (git dışı, deny). `kf.py` çalışırken okur ve config'in üstüne yazar; config'e geri yazmaz. Şablon `.env.dev.example` izlenir. `KF_ENV_FILE` ile dosya adı değiştirilebilir.
 - Ajanlar commit/push/deploy yapmaz; `tester` ve `reviewer` kod yazamaz; planlama belgelerini yalnızca `faz-arsivcisi` günceller.
 - NotebookLM aynalamada güvenlik freni: paket klasörü boşsa hiçbir kaynak silinmez.
 
@@ -162,7 +163,8 @@ git · Python 3.10+ · (önerilir) graphify: `uv tool install "graphifyy[sql]" -
 | `init` "config zaten var" (exit 2) | `repair` (eksikler), `migrate` (v1/v2), `init --force`. |
 | Drive klasörü yok uyarısı | Paket `.claude/bundle-out/` altına yazıldı; Drive masaüstü çalışıyor mu? |
 | `CERTIFICATE_VERIFY_FAILED` (site_audit / pagespeed) | Windows OpenSSL deposunda kök eksik: `pip install certifi` (betikler otomatik kullanır). |
-| `CLOUDFLARE_API_TOKEN tanimli degil` | `.credentials/env.example` → `.env`; token izinleri [references/cloudflare.md](references/cloudflare.md). |
+| `CLOUDFLARE_API_TOKEN tanimli degil` | `.env.dev` içine yaz (şablon `.env.dev.example`); token izinleri [references/cloudflare.md](references/cloudflare.md). |
+| Drive/NotebookLM "etkin" ama çalışmıyor | `kf.py check` ENV DOSYASI satırı: `.env.dev` yok ya da `KF_DRIVE_FOLDER` / `KF_NOTEBOOKLM_ID` boş. Eski projede değerler config'teyse `kf.py repair` `.env.dev`'e taşır. |
 | Cloudflare purge komutu sorulmadan çalıştı | `/permissions` ile `Bash(*cloudflare_ops.py purge*)` kuralı geçerli mi; sürüm ortada `*` desteklemiyorsa tam yol önekiyle yaz. |
 
 ---

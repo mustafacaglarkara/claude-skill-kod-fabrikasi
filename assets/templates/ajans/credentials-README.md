@@ -1,19 +1,18 @@
-# .credentials/ — kimlik bilgileri (git DIŞI, Claude OKUYAMAZ)
+# .credentials/ — kimlik dosyaları (git DIŞI, Claude OKUYAMAZ)
 
-Bu klasör `.gitignore`'da ve `.claude/settings.json` `deny` listesindedir. Betikler (`.claude/scripts/ajans/*.py`) buradaki `.env` dosyasını kendileri okur; değerleri hiçbir çıktıya yazmaz.
+Bu klasör `.gitignore`'da ve `.claude/settings.json` `deny` listesindedir. **API anahtarları burada değil, proje kökündeki `.env.dev` dosyasındadır** (şablon: `.env.dev.example`); betikler (`.claude/scripts/ajans/*.py`) `.env.dev`'i kendileri okur, değerleri hiçbir çıktıya yazmaz. Buraya yalnızca dosya biçimindeki kimlikler konur.
 
 ## Dosyalar
 
-- `.env` — `env.example`'dan kopyalayın:
-  - `CLOUDFLARE_API_TOKEN` — API Token (Global API Key DEĞİL). Önerilen izinler: Zone:Read, Zone Settings:Edit, DNS:Edit, Cache Purge:Purge, Zone WAF:Edit, Analytics:Read, SSL and Certificates:Read, Page Rules:Read, Account › Cloudflare Pages:Read, Account Settings:Read. "Zone Resources" ile yalnızca ajansın yönettiği zone'lara kısıtlayın. Silme izni vermeyin.
-  - `CLOUDFLARE_ACCOUNT_ID` — Pages komutları için (dashboard › hesap › sağ sütun).
-  - `PAGESPEED_API_KEY` — Google Cloud › PageSpeed Insights API (anahtarsız kota çok düşük).
-  - `YOUTUBE_API_KEY` — Google Cloud › YouTube Data API v3.
-  - `GOOGLE_APPLICATION_CREDENTIALS` — service account JSON yolu (varsayılan: bu klasördeki `service-account.json`).
-- `service-account.json` — Google Cloud service account anahtarı. Search Console'da her mülke, GA4'te her property'ye bu hesabın e-postasını "Görüntüleyici/Kısıtlı" olarak ekleyin. API'ler: Search Console API, Analytics Data API etkin olmalı.
+- `service-account.json` — Google Cloud service account anahtarı (GSC + GA4). Search Console'da her mülke, GA4'te her property'ye bu hesabın e-postasını "Görüntüleyici/Kısıtlı" olarak ekleyin. API'ler: Search Console API, Analytics Data API etkin olmalı. Farklı bir yol kullanıyorsanız `.env.dev` → `GOOGLE_APPLICATION_CREDENTIALS`.
+- (eski) `.env` — v3.1 öncesi anahtar dosyası; hâlâ okunur ama yeni anahtarlar `.env.dev`'e.
+
+## `.env.dev` anahtarları (ajans)
+
+`CLOUDFLARE_API_TOKEN` (scoped token; izinler `references/cloudflare.md`), `CLOUDFLARE_ACCOUNT_ID` (Pages), `PAGESPEED_API_KEY`, `YOUTUBE_API_KEY`, `GOOGLE_APPLICATION_CREDENTIALS`.
 
 ## Güvenlik
 
-- Dosyaları paylaşmayın, Drive/NotebookLM'e yüklemeyin (paket yalnızca git'in izlediği dosyalardan oluşur; bu klasör hiç girmez).
+- Dosyaları paylaşmayın, Drive/NotebookLM'e yüklemeyin (paket yalnızca git'in izlediği dosyalardan oluşur; bu klasör ve `.env.dev` hiç girmez).
 - Token'ı yenilediğinizde eskisini Cloudflare'de iptal edin.
-- `kf.py secret-scan` bu klasörü görmez; yanlışlıkla başka yere kopyalanmış değerleri yakalar.
+- `kf.py secret-scan` `.env*` değerlerinin izlenen dosyalara sızmadığını her commit'te denetler.
